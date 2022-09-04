@@ -30,13 +30,18 @@ class LatticeDataset(Dataset):
 def read_coordinates() -> np.ndarray:
     """Return a 3D array of node numbers."""
     
-    with open(os.path.join(DATASET_FOLDER, 'InputCoords.txt'), 'r') as f:
+    with open(os.path.join(DATASET_FOLDER, 'Input_Coords.txt'), 'r') as f:
         lines = f.readlines()[1:]
     
-    nodes = np.zeros((51, 51, 51), dtype=np.int32)
-    for number, (x, y, z) in enumerate(lines, 1):
-        nodes[x, y, z] = number
-    assert np.all(nodes > 0)
+    # nodes = np.zeros((51, 51, 51), dtype=np.int32)
+    # for number, line in enumerate(lines, 1):
+    #     x, y, z = [int(_) for _ in line.split(',')]
+    #     nodes[x, y, z] = number
+    # assert np.all(nodes > 0)
+
+    nodes = []
+    for line in lines:
+        nodes.append([int(_) for _ in line.split(',')])
 
     return nodes
 
@@ -109,7 +114,7 @@ def read_outputs() -> np.ndarray:
                 strut, d = f.readline().strip().split(',')
                 strut, d = int(strut), float(d)
 
-                if d != 0:
+                if d > 0:
                     strut_counter += 1
                     node_1, node_2 = struts[strut - 1]
                     column = (strut - 1) % w
@@ -131,10 +136,12 @@ def read_outputs_as_nodes() -> np.ndarray:
     files = glob.glob(os.path.join(directory, '*.txt'))
     files.sort(key=lambda file: int(os.path.basename(file).split('.')[0].split('_')[1]))
 
-    struts = read_struts()
-    node_numbers = read_coordinates()
+    # Dimensions of the adjacency matrix.
+    h = (51 - (3-1)) ** 3  # Total number of nodes, reduced to remove duplicate nodes
+    w = (3**3) - 1  # Total number of struts per node in a 3x3x3 neighborhood
 
-    nodes = set()
+    struts = read_struts()
+    nodes = read_coordinates()
 
     data_type = np.uint8
     outputs = np.zeros([len(files), 1, 51, 51, 51], dtype=data_type)
@@ -150,13 +157,10 @@ def read_outputs_as_nodes() -> np.ndarray:
                 strut, d = f.readline().strip().split(',')
                 strut, d = int(strut), float(d)
 
-                if d != 0:
-                    node_1, node_2 = struts[strut - 1]
-                    nodes.add(node_1)
-                    nodes.add(node_2)
-
-    for node in nodes:
-        outputs[node_numbers == node] = 1
+                if d > 0:
+                    for node in struts[strut - 1]:
+                        x, y, z = nodes[node]
+                        outputs[i, 0, x, y, z] = 1
     
     outputs = torch.tensor(outputs)
 
@@ -164,10 +168,10 @@ def read_outputs_as_nodes() -> np.ndarray:
 
 
 if __name__ == "__main__":
-    inputs = read_inputs()
-    with open('inputs.pickle', 'wb') as f:
-        pickle.dump(inputs, f)
+    # inputs = read_inputs()
+    # with open('inputs.pickle', 'wb') as f:
+    #     pickle.dump(inputs, f)
     
-    outputs = read_outputs()
+    outputs = read_outputs_as_nodes()
     with open('outputs.pickle', 'wb') as f:
         pickle.dump(outputs, f)
