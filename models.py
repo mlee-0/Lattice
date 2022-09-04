@@ -23,14 +23,13 @@ class LatticeCnn(torch.nn.Module):
         c = 8
 
         # Parameters for all convolution layers.
-        k = (4, 4, 2)
+        k = (4, 4, 4)
         s = (2, 2, 2)
         p = 1
 
         # Total number of nodes in input image.
         n = h * w * d
         # Output size, representing the maximum number of struts possible.
-        # size_output = sum(range(n))
         size_output = np.prod((
             np.prod([dimension - (strut_neighborhood[i] - 1) for i, dimension in enumerate((h, w, d))]),
             np.prod(strut_neighborhood) - 1,
@@ -51,19 +50,25 @@ class LatticeCnn(torch.nn.Module):
             torch.nn.BatchNorm3d(c*4),
             torch.nn.ReLU(inplace=True),
         )
+        self.convolution_4 = torch.nn.Sequential(
+            torch.nn.Conv3d(in_channels=c*4, out_channels=c*8, kernel_size=k, stride=s, padding=p),
+            torch.nn.BatchNorm3d(c*8),
+            torch.nn.ReLU(inplace=True),
+        )
 
         # Size of output of all convolution layers.
-        shape_convolution = self.convolution_3(self.convolution_2(self.convolution_1(torch.empty((1, input_channels, h, w, d))))).size()
+        shape_convolution = self.convolution_4(self.convolution_3(self.convolution_2(self.convolution_1(torch.empty((1, input_channels, h, w, d)))))).size()
         size_convolution = np.prod(shape_convolution[1:])
         print(f'linear: {(size_convolution, size_output)}')
 
-        # self.linear = torch.nn.Linear(in_features=size_convolution, out_features=size_output)
+        self.linear = torch.nn.Linear(in_features=size_convolution, out_features=size_output)
 
     def forward(self, x):
         x = self.convolution_1(x)
         x = self.convolution_2(x)
         x = self.convolution_3(x)
-        # x = self.linear(x.flatten())
+        x = self.convolution_4(x)
+        x = self.linear(x.flatten())
         return x
 
 class NodeCnn(torch.nn.Module):
@@ -80,8 +85,8 @@ class NodeCnn(torch.nn.Module):
         c = 32
 
         # Parameters for all convolution layers.
-        k = (4, 4, 2)
-        s = (2, 2, 1)
+        k = (4, 4, 4)
+        s = (2, 2, 2)
         p = 1
 
         self.convolution_1 = torch.nn.Sequential(
@@ -188,8 +193,8 @@ class NodeStrutCnn(torch.nn.Module):
         c = 32
 
         # Parameters for all convolution layers.
-        k = (4, 4, 2)
-        s = (2, 2, 1)
+        k = (4, 4, 4)
+        s = (2, 2, 2)
         p = 1
 
         self.convolution_1 = torch.nn.Sequential(
@@ -286,7 +291,7 @@ class NodeStrutCnn(torch.nn.Module):
 class LatticeGnn(torch.nn.Module):
     """A GNN whose input is a fully-connected graph of node locations and whose output is a graph of strut diameters."""
 
-    from torch_geometric.nn import GCNConv
+    # from torch_geometric.nn import GCNConv
 
     def __init__(self) -> None:
         super().__init__()
