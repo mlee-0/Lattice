@@ -1,7 +1,7 @@
 import os
 from queue import Queue
 import time
-from typing import Tuple
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,9 +9,44 @@ import torch
 from torch import nn
 from torch.utils.data import Dataset, Subset, DataLoader
 
+from datasets import LatticeDataset
 import metrics
 from models import *
 
+
+def plot_loss(figure: matplotlib.figure.Figure, epochs: list, loss: List[list], labels: List[str], start_epoch: int = None) -> None:
+    """
+    Plot loss values over epochs on the given figure.
+    Parameters:
+    `figure`: A figure to plot on.
+    `epochs`: A sequence of epoch numbers.
+    `loss`: A list of lists of loss values, each of which are plotted as separate lines. Each nested list must have the same length as `epochs`.
+    `labels`: A list of strings to display in the legend for each item in `loss`.
+    `start_epoch`: The epoch number at which to display a horizontal line to indicate the start of the current training session.
+    """
+    figure.clear()
+    axis = figure.add_subplot(1, 1, 1)  # Number of rows, number of columns, index
+    
+    # markers = (".:", ".-")
+    # colors = (Colors.BLUE, Colors.ORANGE)
+
+    # Plot each set of loss values.
+    for i, loss_i in enumerate(loss):
+        if not len(loss_i):
+            continue
+        # color = colors[i % len(colors)]
+        axis.plot(epochs[:len(loss_i)], loss_i, ".-", label=labels[i])
+        axis.annotate(f"{loss_i[-1]:,.2f}", (epochs[-1 - (len(epochs)-len(loss_i))], loss_i[-1]), fontsize=10)
+    
+    # # Plot a vertical line indicating when the current training session began.
+    # if start_epoch:
+    #     axis.vlines(start_epoch - 0.5, 0, max([max(_) for _ in loss]), colors=(Colors.GRAY,), label="Current session starts")
+    
+    axis.legend()
+    axis.set_ylim(bottom=0)
+    axis.set_xlabel("Epochs")
+    axis.set_ylabel("Loss")
+    axis.grid(axis="y")
 
 def save_model(filepath: str, **kwargs) -> None:
     """Save model parameters to a file."""
@@ -73,13 +108,13 @@ def train_regression(
         loss = 0
 
         for batch, (input_data, label_data) in enumerate(train_dataloader, 1):
-            input_data = input_data.to(device)
-            label_data = label_data.to(device)
+            input_data = input_data.to(device).float()
+            label_data = label_data.to(device).float()
             
             # Predict an output from the model with the given input.
             output_data = model(input_data)
             # Calculate the loss.
-            loss_current = loss_function(output_data, label_data.float())
+            loss_current = loss_function(output_data, label_data)
             loss += loss_current.item()
 
             if loss_current is torch.nan:
@@ -125,10 +160,10 @@ def train_regression(
         labels = []
         with torch.no_grad():
             for batch, (input_data, label_data) in enumerate(validate_dataloader, 1):
-                input_data = input_data.to(device)
-                label_data = label_data.to(device)
+                input_data = input_data.to(device).float()
+                label_data = label_data.to(device).float()
                 output_data = model(input_data)
-                loss += loss_function(output_data, label_data.float()).item()
+                loss += loss_function(output_data, label_data).item()
 
                 # Convert to NumPy arrays for evaluation metric calculations.
                 output_data = output_data.cpu().numpy()
@@ -225,10 +260,10 @@ def test_regression(
 
     with torch.no_grad():
         for batch, (input_data, label_data) in enumerate(test_dataloader, 1):
-            input_data = input_data.to(device)
-            label_data = label_data.to(device)
+            input_data = input_data.to(device).float()
+            label_data = label_data.to(device).float()
             output_data = model(input_data)
-            loss += loss_function(output_data, label_data.float()).item()
+            loss += loss_function(output_data, label_data).item()
 
             # Convert to NumPy arrays for evaluation metric calculations.
             input_data = input_data.cpu().detach().numpy()
@@ -282,10 +317,9 @@ def evaluate_regression(outputs: np.ndarray, labels: np.ndarray, inputs: np.ndar
 def main(
     epoch_count: int, learning_rate: float, decay_learning_rate: bool, batch_sizes: Tuple[int, int, int], training_split: Tuple[float, float, float], Model: nn.Module,
     filename_model: str, train_existing: bool, save_model_every: int,
-    dataset_id: int,
+    dataset: Dataset,
     train: bool, test: bool, evaluate: bool,
     Optimizer: torch.optim.Optimizer = torch.optim.SGD, Loss: nn.Module = nn.MSELoss,
-    transformation_exponent: float = None,
     queue: Queue = None, queue_to_main: Queue = None,
 ):
     """
@@ -304,7 +338,7 @@ def main(
     `Optimizer`: An Optimizer subclass to instantiate, not an instance of the class.
     `Loss`: A Module subclass to instantiate, not an instance of the class.
 
-    `dataset_id`: An integer representing the dataset to use.
+    `dataset`: The Dataset to train on.
     `training_split`: A tuple of three floats in [0, 1] of the training, validation, and testing ratios.
     `filename_model`: Name of the .pth file to load and save to during training.
     
@@ -332,10 +366,7 @@ def main(
     else:
         checkpoint = None
 
-    assert dataset_id in {2, 3, 4}, f"Invalid dataset ID: {dataset_id}."
-
     # Create the dataset and split it into training, validation, and testing datasets.
-    dataset = ...
     sample_size = len(dataset)
     train_size, validate_size, test_size = [int(split * sample_size) for split in training_split]
     train_dataset, validate_dataset, test_dataset = torch.utils.data.random_split(
@@ -351,10 +382,7 @@ def main(
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size_test, shuffle=False)    
 
     # Initialize the model, optimizer, and loss function.
-    args = {
-        LatticeCnn: [(50, 50, 10), (3, 3, 3)],
-    }
-    model = Model(*args[Model])
+    model = Model()
     model.to(device)
     optimizer = Optimizer(model.parameters(), lr=learning_rate)
     if decay_learning_rate:
@@ -411,16 +439,6 @@ def main(
             info_gui = info_gui,
         )
 
-        # Transform values back to original range.
-        outputs = dataset.transform(
-            dataset.scale(outputs, inverse=True),
-            inverse=True,
-        )
-        labels = dataset.transform(
-            dataset.scale(labels, inverse=True),
-            inverse=True,
-        )
-
         if evaluate:
             results = evaluate_regression(outputs, labels, inputs, dataset, queue=queue, info_gui=info_gui)
 
@@ -432,18 +450,17 @@ if __name__ == "__main__":
         "save_model_every": 10,
 
         "epoch_count": 10,
-        "learning_rate": 1e-7,
+        "learning_rate": 1e-2,
         "decay_learning_rate": not True,
-        "batch_sizes": (32, 128, 128),
+        "batch_sizes": (1, 64, 64),
         "training_split": (0.8, 0.1, 0.1),
-        "Model": LatticeCnn,
+        "Model": NodeCnn,
         "Optimizer": torch.optim.SGD,
-        "Loss": nn.MSELoss,
+        "Loss": nn.BCELoss,
         
-        "dataset_id": 3,
-        "transformation_exponent": 1,
+        "dataset": LatticeDataset(),
         
-        "train": not True,
+        "train": True,
         "test": True,
         "evaluate": True,
     }

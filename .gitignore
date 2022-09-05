@@ -1,4 +1,5 @@
 .DS_Store
+.pyc
 
 Training_Data_50
 *.pickle

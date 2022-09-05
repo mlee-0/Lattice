@@ -12,13 +12,31 @@ import torch
 from torch.utils.data import Dataset, Subset, DataLoader
 
 
-DATASET_FOLDER = 'Training_Data_50'
+try:
+    from google.colab import drive
+except ImportError:
+    DATASET_FOLDER = 'Training_Data_50'
+else:
+    drive.mount('/content/drive')
+    DATASET_FOLDER = 'drive/My Drive/Lattice'
 
 
 class LatticeDataset(Dataset):
-    def __init__(self, folder: str) -> None:
-        with open(os.path.join(folder, 'cache.pickle'), 'rb') as f:
-            self.inputs, self.outputs = pickle.load(f)
+    def __init__(self) -> None:
+        with open(os.path.join(DATASET_FOLDER, 'inputs.pickle'), 'rb') as f:
+            self.inputs = pickle.load(f)
+        with open(os.path.join(DATASET_FOLDER, 'outputs.pickle'), 'rb') as f:
+            self.outputs = pickle.load(f)
+        
+        # Augment the dataset by rotation.
+        self.inputs = torch.cat(
+            [self.inputs] + [torch.rot90(self.inputs, k, dims) for k in range(1, 4) for dims in [[2, 3], [3, 4], [2, 4]]],
+            dim=0,
+        )
+        self.outputs = torch.cat(
+            [self.outputs] + [torch.rot90(self.outputs, k, dims) for k in range(1, 4) for dims in [[2, 3], [3, 4], [2, 4]]],
+            dim=0,
+        )
 
     def __len__(self) -> int:
         return len(self.inputs)
@@ -27,8 +45,8 @@ class LatticeDataset(Dataset):
         return self.inputs[index, ...], self.outputs[index, ...]
 
 
-def read_coordinates() -> np.ndarray:
-    """Return a 3D array of node numbers."""
+def read_coordinates() -> List[List[int]]:
+    """Return a list of lists of X, Y, Z coordinates."""
     
     with open(os.path.join(DATASET_FOLDER, 'Input_Coords.txt'), 'r') as f:
         lines = f.readlines()[1:]
@@ -39,11 +57,11 @@ def read_coordinates() -> np.ndarray:
     #     nodes[x, y, z] = number
     # assert np.all(nodes > 0)
 
-    nodes = []
+    coordinates = []
     for line in lines:
-        nodes.append([int(_) for _ in line.split(',')])
+        coordinates.append([int(_) for _ in line.split(',')])
 
-    return nodes
+    return coordinates
 
 def read_struts() -> List[List[int]]:
     """Return a list of lists of the two nodes for each strut."""
@@ -78,7 +96,7 @@ def read_inputs() -> np.ndarray:
 
         for d, file in enumerate(files):
             with Image.open(file) as f:
-                inputs[i, 0, ..., d] = (image:=np.asarray(f, dtype=data_type))
+                inputs[i, 0, ..., d] = np.asarray(f, dtype=data_type)
     
     inputs = torch.tensor(inputs)
 

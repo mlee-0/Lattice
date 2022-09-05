@@ -20,11 +20,11 @@ class LatticeCnn(torch.nn.Module):
         strut_neighborhood = (3, 3, 3)
 
         # Number of output channels in the first layer.
-        c = 8
+        c = 2
 
         # Parameters for all convolution layers.
-        k = (4, 4, 4)
-        s = (2, 2, 2)
+        k = 5
+        s = 2
         p = 1
 
         # Total number of nodes in input image.
@@ -82,15 +82,15 @@ class NodeCnn(torch.nn.Module):
         output_channels = 1
 
         # Number of output channels in the first layer.
-        c = 32
+        c = 4
 
         # Parameters for all convolution layers.
-        k = (4, 4, 4)
-        s = (2, 2, 2)
+        k = 5
+        s = 2
         p = 1
 
         self.convolution_1 = torch.nn.Sequential(
-            torch.nn.Conv3d(input_channels, c*1, kernel_size=9, stride=1, padding="same", padding_mode="zeros"),
+            torch.nn.Conv3d(input_channels, c*1, kernel_size=k, stride=s, padding=p, padding_mode="zeros"),
             torch.nn.BatchNorm3d(c*1),
             torch.nn.ReLU(inplace=True),
         )
@@ -141,37 +141,43 @@ class NodeCnn(torch.nn.Module):
         self.se_5 = se_block(output_size_residual)
 
         self.deconvolution_1 = torch.nn.Sequential(
-            torch.nn.ConvTranspose3d(c*4, c*2, kernel_size=k, stride=s, padding=p, output_padding=(0,0), padding_mode="zeros"),
+            torch.nn.ConvTranspose3d(c*4, c*2, kernel_size=k, stride=s, padding=p, output_padding=1, padding_mode="zeros"),
             torch.nn.ReLU(inplace=True),
             torch.nn.BatchNorm3d(c*2),
         )
         self.deconvolution_2 = torch.nn.Sequential(
-            torch.nn.ConvTranspose3d(c*2, c*1, kernel_size=k, stride=s, padding=p, output_padding=(0,0), padding_mode="zeros"),
+            torch.nn.ConvTranspose3d(c*2, c*1, kernel_size=k, stride=s, padding=p, output_padding=0, padding_mode="zeros"),
             torch.nn.ReLU(inplace=True),
             torch.nn.BatchNorm3d(c*1),
         )
         self.deconvolution_3 = torch.nn.Sequential(
-            torch.nn.Conv3d(c*1, output_channels, kernel_size=9, stride=1, padding="same", padding_mode="zeros"),
+            torch.nn.ConvTranspose3d(c*1, output_channels, kernel_size=k, stride=s, padding=p, output_padding=0, padding_mode="zeros"),
             # torch.nn.BatchNorm3d(OUTPUT_CHANNELS, momentum=MOMENTUM, track_running_stats=TRACK_RUNNING_STATS),
             torch.nn.Sigmoid(),
-            # torch.nn.ReLU(inplace=True),
         )
 
     def forward(self, x):
+        batch_size = x.size(0)
+
         x = self.convolution_1(x)
         x = self.convolution_2(x)
         x = self.convolution_3(x)
 
-        x = self.residual_1(x)
-        x = self.se_1(x)
-        x = self.residual_2(x)
-        x = self.se_2(x)
-        x = self.residual_3(x)
-        x = self.se_3(x)
-        x = self.residual_4(x)
-        x = self.se_4(x)
-        x = self.residual_5(x)
-        x = self.se_5(x)
+        residual = self.residual_1(x)
+        se = self.se_1(x)
+        x = x + residual * se.reshape((batch_size, -1, 1, 1, 1))
+        residual = self.residual_2(x)
+        se = self.se_2(x)
+        x = x + residual * se.reshape((batch_size, -1, 1, 1, 1))
+        residual = self.residual_3(x)
+        se = self.se_3(x)
+        x = x + residual * se.reshape((batch_size, -1, 1, 1, 1))
+        residual = self.residual_4(x)
+        se = self.se_4(x)
+        x = x + residual * se.reshape((batch_size, -1, 1, 1, 1))
+        residual = self.residual_5(x)
+        se = self.se_5(x)
+        x = x + residual * se.reshape((batch_size, -1, 1, 1, 1))
 
         x = self.deconvolution_1(x)
         x = self.deconvolution_2(x)
