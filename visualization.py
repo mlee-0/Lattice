@@ -1,4 +1,4 @@
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 # import networkx as nx
 import numpy as np
 import vtk
@@ -7,31 +7,95 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from datasets import *
 
 
-def plot_lattice(data) -> None:
-    """Plot the graph, given as a 2D array with shape (number of struts, 2), containing strut numbers in the first column and diameters in the second column."""
+def plot_nodes(array: np.ndarray) -> None:
+    """Show a 3D plot of node locations."""
+    transparency = 1.0
 
-    struts = read_struts()
-
-    data = data[:50, :]
-
-    graph = nx.Graph()
-    nodes = set()
-    edges = []
-
-    for i in range(data.shape[0]):
-        strut, d = data[i, :]
-        if d > 0:
-            node_1, node_2 = struts[int(strut) - 1]
-            nodes.add(node_1)
-            nodes.add(node_2)
-            edges.append((node_1, node_2, d))
-
-    graph.add_nodes_from(nodes)
-    graph.add_weighted_edges_from(edges)
-
-    plt.figure()
-    nx.draw(graph, nodelist=[], width=[graph[u][v]['weight'] for u, v in graph.edges()])
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1, projection="3d")
+    ax.voxels(
+        filled=(array > 0),
+        facecolors=(1, 1, 1, transparency),
+        linewidth=0.25,
+        edgecolors=(1, 1, 1),
+    )
+    ax.set(xlabel="X", ylabel="Y", zlabel="Z")
+    # ax.set(xlim=axis_limits, ylim=axis_limits, zlim=axis_limits)
     plt.show()
+
+def visualize_input(array: np.ndarray) -> None:
+    ren = vtk.vtkRenderer()
+    window = vtk.vtkRenderWindow()
+    window.AddRenderer(ren)
+    iren = vtk.vtkRenderWindowInteractor()
+    iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
+    iren.SetRenderWindow(window)
+
+    array = np.array(array)
+    
+    points = vtk.vtkPoints()
+    colors = vtk.vtkUnsignedCharArray()
+    colors.SetNumberOfComponents(3)
+    colors.SetName("colors")
+    for x in range(array.shape[0]):
+        for y in range(array.shape[0]):
+            for z in range(array.shape[0]):
+                points.InsertNextPoint(x, y, z)
+                colors.InsertNextTuple([array[x, y, z]] * 3)
+
+    data = vtk.vtkPolyData()
+    data.SetPoints(points)
+    data.GetPointData().AddArray(colors)
+
+    glyph = vtk.vtkCubeSource()
+    # glyph.SetBounds([-0.4, 0.4] * 3)
+    mapper = vtk.vtkGlyph3DMapper()
+    mapper.SetSourceConnection(glyph.GetOutputPort())
+    mapper.SetInputData(data)
+    mapper.SetScalarModeToUsePointFieldData()
+    mapper.SelectColorArray("colors")
+    mapper.Update()
+
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+    actor.GetProperty().SetLineWidth(1)
+    actor.GetProperty().SetOpacity(0.5)
+
+    ren.AddActor(actor)
+    iren.Initialize()
+    window.Render()
+    iren.Start()
+
+def visualize_nodes(array: np.ndarray) -> None:
+    ren = vtk.vtkRenderer()
+    window = vtk.vtkRenderWindow()
+    window.AddRenderer(ren)
+    iren = vtk.vtkRenderWindowInteractor()
+    iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
+    iren.SetRenderWindow(window)
+
+    data = vtk.vtkAppendPolyData()
+    array = np.array(array)
+    indices = np.nonzero(array)
+    for x, y, z in zip(*indices):
+        cube = vtk.vtkCubeSource()
+        cube.SetBounds(x, x+1, y, y+1, z, z+1)
+        cube.Update()
+        data.AddInputData(cube.GetOutput())
+    data.Update()
+
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputData(data.GetOutput())
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+    actor.GetProperty().SetColor([1, 1, 1])
+    actor.GetProperty().SetLineWidth(1)
+    actor.GetProperty().SetOpacity(1.0)
+
+    ren.AddActor(actor)
+    iren.Initialize()
+    window.Render()
+    iren.Start()
 
 def visualize_lattice(lattice: np.ndarray) -> None:
     ren = vtk.vtkRenderer()
@@ -44,9 +108,12 @@ def visualize_lattice(lattice: np.ndarray) -> None:
     data = vtk.vtkAppendPolyData()
     coordinates = read_coordinates()
     struts = read_struts()
-    lattice = lattice[:500, :]
+    lattice = lattice[:100_000, :]
 
     for i in range(lattice.shape[0]):
+        if i % 10000 == 0:
+            print(f"{i}/{lattice.shape[0]}...", end='\r')
+        
         strut, d = lattice[i, :]
         if d > 0:
             node_1, node_2 = struts[int(strut) - 1]
@@ -56,7 +123,7 @@ def visualize_lattice(lattice: np.ndarray) -> None:
             line.SetResolution(0)
             line.Update()
             data.AddInputData(line.GetOutput())
-            data.Update()
+    data.Update()
     
     # tube = vtk.vtkTubeFilter()
     # tube.SetInputData(data.GetOutput())
@@ -66,12 +133,10 @@ def visualize_lattice(lattice: np.ndarray) -> None:
     mapper.SetInputData(data.GetOutput())
     actor = vtk.vtkActor()
     actor.SetMapper(mapper)
-    actor.GetProperty().SetColor([1, 1, 1])
     actor.GetProperty().SetLineWidth(1)
 
     ren.AddActor(actor)
     ren.ResetCamera()
-    ren.SetBackground([0, 0, 0])
     iren.Initialize()
     window.Render()
     iren.Start()
@@ -93,3 +158,11 @@ if __name__ == "__main__":
                 data.append([strut, d])
 
     visualize_lattice(np.array(data))
+
+    # with open("outputs.pickle", 'rb') as f:
+    #     nodes = pickle.load(f)
+    # visualize_nodes(nodes[0, 0, ...])
+    
+    # with open("inputs.pickle", 'rb') as f:
+    #     array = pickle.load(f)
+    # visualize_input(array[0, 0, :20, :20, :20])
