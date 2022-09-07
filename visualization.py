@@ -23,7 +23,7 @@ def plot_nodes(array: np.ndarray) -> None:
     # ax.set(xlim=axis_limits, ylim=axis_limits, zlim=axis_limits)
     plt.show()
 
-def visualize_input(array: np.ndarray) -> None:
+def visualize_input(array: np.ndarray, opacity: float=0.5) -> None:
     ren = vtk.vtkRenderer()
     window = vtk.vtkRenderWindow()
     window.AddRenderer(ren)
@@ -40,8 +40,9 @@ def visualize_input(array: np.ndarray) -> None:
     for x in range(array.shape[0]):
         for y in range(array.shape[0]):
             for z in range(array.shape[0]):
-                points.InsertNextPoint(x, y, z)
-                colors.InsertNextTuple([array[x, y, z]] * 3)
+                if array[x, y, z]/255 >= 0:
+                    points.InsertNextPoint(x, y, z)
+                    colors.InsertNextTuple([array[x, y, z]] * 3)
 
     data = vtk.vtkPolyData()
     data.SetPoints(points)
@@ -59,14 +60,14 @@ def visualize_input(array: np.ndarray) -> None:
     actor = vtk.vtkActor()
     actor.SetMapper(mapper)
     actor.GetProperty().SetLineWidth(1)
-    actor.GetProperty().SetOpacity(0.5)
+    actor.GetProperty().SetOpacity(opacity)
 
     ren.AddActor(actor)
     iren.Initialize()
     window.Render()
     iren.Start()
 
-def visualize_nodes(array: np.ndarray) -> None:
+def visualize_nodes(array: np.ndarray, opacity: float=1.0) -> None:
     ren = vtk.vtkRenderer()
     window = vtk.vtkRenderWindow()
     window.AddRenderer(ren)
@@ -90,7 +91,7 @@ def visualize_nodes(array: np.ndarray) -> None:
     actor.SetMapper(mapper)
     actor.GetProperty().SetColor([1, 1, 1])
     actor.GetProperty().SetLineWidth(1)
-    actor.GetProperty().SetOpacity(1.0)
+    actor.GetProperty().SetOpacity(opacity)
 
     ren.AddActor(actor)
     iren.Initialize()
@@ -159,10 +160,10 @@ if __name__ == "__main__":
 
     visualize_lattice(np.array(data))
 
-    # with open("outputs.pickle", 'rb') as f:
+    # with open("Training_Data_50/outputs_nodes.pickle", 'rb') as f:
     #     nodes = pickle.load(f)
-    # visualize_nodes(nodes[0, 0, ...])
+    # visualize_nodes(nodes[1, 0, ...], opacity=1.0)
     
-    # with open("inputs.pickle", 'rb') as f:
+    # with open("Training_Data_50/inputs.pickle", 'rb') as f:
     #     array = pickle.load(f)
-    # visualize_input(array[0, 0, :20, :20, :20])
+    # visualize_input(array[1, 0, ...], opacity=1.0)

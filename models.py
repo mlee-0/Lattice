@@ -16,8 +16,11 @@ class LatticeCnn(torch.nn.Module):
         super().__init__()
 
         h, w, d = 51, 51, 51
-        input_channels = 1
+        input_channels = 2
         strut_neighborhood = (3, 3, 3)
+
+        self.index_channel = torch.arange(h*w*d).reshape((1, 1, h, w, d)).to('cpu').float()
+        self.index_channel /= self.index_channel.max() * 255
 
         # Number of output channels in the first layer.
         c = 2
@@ -27,13 +30,12 @@ class LatticeCnn(torch.nn.Module):
         s = 2
         p = 1
 
-        # Total number of nodes in input image.
-        n = h * w * d
         # Output size, representing the maximum number of struts possible.
-        size_output = np.prod((
+        self.shape_output = (
             np.prod([dimension - (strut_neighborhood[i] - 1) for i, dimension in enumerate((h, w, d))]),
             np.prod(strut_neighborhood) - 1,
-        ))
+        )
+        size_output = np.prod(self.shape_output)
 
         self.convolution_1 = torch.nn.Sequential(
             torch.nn.Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=k, stride=s, padding=p),
@@ -61,14 +63,22 @@ class LatticeCnn(torch.nn.Module):
         size_convolution = np.prod(shape_convolution[1:])
         print(f'linear: {(size_convolution, size_output)}')
 
-        self.linear = torch.nn.Linear(in_features=size_convolution, out_features=size_output)
+        self.linear = torch.nn.Sequential(
+            torch.nn.Linear(in_features=size_convolution, out_features=size_output),
+            torch.nn.Sigmoid(),
+        )
 
     def forward(self, x):
+        batch_size = x.size(0)
+        x = torch.cat([x, torch.cat([self.index_channel] * batch_size, dim=0)], dim=1)
+
         x = self.convolution_1(x)
         x = self.convolution_2(x)
         x = self.convolution_3(x)
         x = self.convolution_4(x)
-        x = self.linear(x.flatten())
+        x = self.linear(x.view(batch_size, -1))
+        x = x.reshape((batch_size, *self.shape_output))
+
         return x
 
 class NodeCnn(torch.nn.Module):
@@ -268,7 +278,6 @@ class NodeStrutCnn(torch.nn.Module):
             torch.nn.Conv3d(c*1, output_channels, kernel_size=9, stride=1, padding="same", padding_mode="zeros"),
             # torch.nn.BatchNorm3d(OUTPUT_CHANNELS, momentum=MOMENTUM, track_running_stats=TRACK_RUNNING_STATS),
             torch.nn.Sigmoid(),
-            # torch.nn.ReLU(inplace=True),
         )
 
     def forward(self, x):
