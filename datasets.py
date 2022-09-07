@@ -4,6 +4,7 @@
 import glob
 import os
 import pickle
+import time
 from typing import List
 
 import numpy as np
@@ -23,20 +24,39 @@ else:
 
 class LatticeDataset(Dataset):
     def __init__(self) -> None:
+        time_start = time.time()
+        
         with open(os.path.join(DATASET_FOLDER, 'inputs.pickle'), 'rb') as f:
             self.inputs = pickle.load(f)
-        with open(os.path.join(DATASET_FOLDER, 'outputs.pickle'), 'rb') as f:
+        with open(os.path.join(DATASET_FOLDER, 'outputs_lattice.pickle'), 'rb') as f:
             self.outputs = pickle.load(f)
+
+        with open(os.path.join(DATASET_FOLDER, 'outputs_nodes.pickle'), 'rb') as f:
+            nodes = pickle.load(f)
+        self.inputs[nodes == 0] = 0
         
-        # Augment the dataset by rotation.
-        self.inputs = torch.cat(
-            [self.inputs] + [torch.rot90(self.inputs, k, dims) for k in range(1, 4) for dims in [[2, 3], [3, 4], [2, 4]]],
-            dim=0,
-        )
-        self.outputs = torch.cat(
-            [self.outputs] + [torch.rot90(self.outputs, k, dims) for k in range(1, 4) for dims in [[2, 3], [3, 4], [2, 4]]],
-            dim=0,
-        )
+        time_end = time.time()
+        print(f"Loaded dataset in {round(time_end - time_start)} seconds.")
+        
+        # # Augment the dataset by rotation.
+        # self.inputs = torch.cat(
+        #     [self.inputs] + [torch.rot90(self.inputs, k, dims) for k in range(1, 4) for dims in [[2, 3]]],
+        #     dim=0,
+        # )
+        # self.outputs = 
+
+    def __len__(self) -> int:
+        return len(self.inputs)
+
+    def __getitem__(self, index):
+        return self.inputs[index, ...], self.outputs[index, ...]
+
+class NodeDataset(Dataset):
+    def __init__(self) -> None:
+        with open(os.path.join(DATASET_FOLDER, 'inputs.pickle'), 'rb') as f:
+            self.inputs = pickle.load(f)
+        with open(os.path.join(DATASET_FOLDER, 'outputs_nodes.pickle'), 'rb') as f:
+            self.outputs = pickle.load(f)
 
     def __len__(self) -> int:
         return len(self.inputs)
@@ -114,8 +134,7 @@ def read_outputs() -> np.ndarray:
     h = (51 - (3-1)) ** 3  # Total number of nodes, reduced to remove duplicate nodes
     w = (3**3) - 1  # Total number of struts per node in a 3x3x3 neighborhood
 
-    indices = []
-    values = []
+    outputs = torch.zeros((len(files), h, w), dtype=torch.float32)
 
     struts = read_struts()
 
@@ -137,12 +156,9 @@ def read_outputs() -> np.ndarray:
                     node_1, node_2 = struts[strut - 1]
                     column = (strut - 1) % w
 
-                    indices.append([i, node_1-1, column])
-                    values.append(d)
+                    outputs[i, node_1-1, column] = d
     
     print(f"\nDensity of adjacency matrix: {strut_counter / (len(files) * h * w)}")
-
-    outputs = torch.sparse_coo_tensor(np.array(indices).transpose(), values, (len(files), h, w), dtype=torch.float32)
 
     return outputs
 
@@ -190,6 +206,17 @@ if __name__ == "__main__":
     # with open('inputs.pickle', 'wb') as f:
     #     pickle.dump(inputs, f)
     
-    outputs = read_outputs_as_nodes()
-    with open('outputs.pickle', 'wb') as f:
-        pickle.dump(outputs, f)
+    # outputs = read_outputs_as_nodes()
+    # with open('outputs_nodes.pickle', 'wb') as f:
+    #     pickle.dump(outputs, f)
+    
+    # outputs = read_outputs()
+    # with open('outputs_lattice.pickle', 'wb') as f:
+    #     pickle.dump(outputs, f)
+    
+    with open('outputs_lattice.pickle', 'rb') as f:
+        outputs = pickle.load(f)
+    print('done')
+    # outputs = outputs.to(torch.float16)
+    with open('outputs_lattice_sparse.pickle', 'wb') as f:
+        pickle.dump(outputs.to_sparse_coo(), f)

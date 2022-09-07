@@ -14,7 +14,7 @@ import metrics
 from models import *
 
 
-def plot_loss(figure: matplotlib.figure.Figure, epochs: list, loss: List[list], labels: List[str], start_epoch: int = None) -> None:
+def plot_loss(figure, epochs: list, loss: List[list], labels: List[str], start_epoch: int = None) -> None:
     """
     Plot loss values over epochs on the given figure.
     Parameters:
@@ -100,7 +100,7 @@ def train_regression(
 
     # Main training-validation loop.
     for epoch in epochs:
-        print(f"\nEpoch {epoch}/{epochs[-1]} ({time.strftime('%I:%M:%S %p')})")
+        print(f"\nEpoch {epoch}/{epochs[-1]} ({time.strftime('%I:%M %p')})")
         time_start = time.time()
         
         # Train on the training dataset.
@@ -128,7 +128,7 @@ def train_regression(
             # Adjust model parameters.
             optimizer.step()
 
-            if batch % 10 == 0:
+            if batch % 1 == 0:
                 print(f"Batch {batch}/{len(train_dataloader)}: {loss/batch:,.2e}...", end="\r")
                 if queue:
                     info_gui["progress_batch"] = (batch, len(train_dataloader)+len(validate_dataloader))
@@ -374,7 +374,7 @@ def main(
         [train_size, validate_size, test_size],
         generator=torch.Generator().manual_seed(42),
     )
-    print(f"Split {sample_size:,} samples into {train_size:,} training / {validate_size:,} validation / {test_size:,} test.")
+    print(f"Split {sample_size:,} samples into {train_size:,} training / {validate_size:,} validation / {test_size:,} testing.")
 
     batch_size_train, batch_size_validate, batch_size_test = batch_sizes
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size_train, shuffle=True)
@@ -447,16 +447,16 @@ if __name__ == "__main__":
     kwargs = {
         "filename_model": "model.pth",
         "train_existing": not True,
-        "save_model_every": 10,
+        "save_model_every": 5,
 
-        "epoch_count": 10,
+        "epoch_count": 5,
         "learning_rate": 1e-2,
         "decay_learning_rate": not True,
-        "batch_sizes": (1, 64, 64),
+        "batch_sizes": (8, 64, 64),
         "training_split": (0.8, 0.1, 0.1),
-        "Model": NodeCnn,
+        "Model": LatticeCnn,
         "Optimizer": torch.optim.SGD,
-        "Loss": nn.BCELoss,
+        "Loss": nn.MSELoss,
         
         "dataset": LatticeDataset(),
         
