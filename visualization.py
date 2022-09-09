@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 # import networkx as nx
 import numpy as np
 import vtk
-from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor 
+from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 from datasets import *
 
@@ -24,6 +24,8 @@ def plot_nodes(array: np.ndarray) -> None:
     plt.show()
 
 def visualize_input(array: np.ndarray, opacity: float=0.5) -> None:
+    """Start a visualization of a 3D input image."""
+
     ren = vtk.vtkRenderer()
     window = vtk.vtkRenderWindow()
     window.AddRenderer(ren)
@@ -68,6 +70,8 @@ def visualize_input(array: np.ndarray, opacity: float=0.5) -> None:
     iren.Start()
 
 def visualize_nodes(array: np.ndarray, opacity: float=1.0) -> None:
+    """Start a visualization a 3D voxel model with white cubes representing nodes."""
+
     ren = vtk.vtkRenderer()
     window = vtk.vtkRenderWindow()
     window.AddRenderer(ren)
@@ -99,6 +103,8 @@ def visualize_nodes(array: np.ndarray, opacity: float=1.0) -> None:
     iren.Start()
 
 def visualize_lattice(lattice: np.ndarray) -> None:
+    """Start a visualization of a lattice defined as a 2D array of diameters with shape (number of nodes, number of struts per node)."""
+
     ren = vtk.vtkRenderer()
     window = vtk.vtkRenderWindow()
     window.AddRenderer(ren)
@@ -106,24 +112,26 @@ def visualize_lattice(lattice: np.ndarray) -> None:
     iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
     iren.SetRenderWindow(window)
 
-    data = vtk.vtkAppendPolyData()
     coordinates = read_coordinates()
     struts = read_struts()
-    lattice = lattice[:100_000, :]
 
-    for i in range(lattice.shape[0]):
-        if i % 10000 == 0:
-            print(f"{i}/{lattice.shape[0]}...", end='\r')
-        
-        strut, d = lattice[i, :]
-        if d > 0:
-            node_1, node_2 = struts[int(strut) - 1]
-            line = vtk.vtkLineSource()
-            line.SetPoint1(coordinates[node_1 - 1])
-            line.SetPoint2(coordinates[node_2 - 1])
-            line.SetResolution(0)
-            line.Update()
-            data.AddInputData(line.GetOutput())
+    data = vtk.vtkAppendPolyData()
+
+    for node_1 in range(lattice.shape[0]):
+        for node_2 in range(lattice.shape[1]):
+            # if i % 10000 == 0:
+            #     print(f"{i}/{lattice.shape[0]}...", end='\r')
+            
+            d = lattice[node_1, node_2]
+            if d > 0:
+                strut = node_1 * lattice.shape[1] + node_2
+                node_1, node_2 = struts[strut]
+                line = vtk.vtkLineSource()
+                line.SetPoint1(coordinates[node_1 - 1])
+                line.SetPoint2(coordinates[node_2 - 1])
+                line.SetResolution(0)
+                line.Update()
+                data.AddInputData(line.GetOutput())
     data.Update()
     
     # tube = vtk.vtkTubeFilter()
@@ -144,21 +152,9 @@ def visualize_lattice(lattice: np.ndarray) -> None:
 
 
 if __name__ == "__main__":
-    with open('Lattice_1.txt', 'r') as f:
-        # Dimensions of the adjacency matrix.
-        h = (51 - (3-1)) ** 3  # Total number of nodes, reduced to remove duplicate nodes
-        w = (3**3) - 1  # Total number of struts per node in a 3x3x3 neighborhood
-        # Ignore the header line.
-        _ = f.readline()
-        # Read all lines except the lines at the bottom containing duplicate struts.
-        data = []
-        for line in range(1, h*w + 1):
-            strut, d = f.readline().strip().split(',')
-            strut, d = int(strut), float(d)
-            if d > 0:
-                data.append([strut, d])
-
-    visualize_lattice(np.array(data))
+    with open('Training_Data_50/outputs.pickle', 'rb') as f:
+        outputs = f.load(f)
+    visualize_lattice(np.array(outputs[0, ...]))
 
     # with open("Training_Data_50/outputs_nodes.pickle", 'rb') as f:
     #     nodes = pickle.load(f)
