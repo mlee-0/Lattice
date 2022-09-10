@@ -9,6 +9,7 @@ from typing import List, Tuple
 import numpy as np
 from PIL import Image
 import torch
+import torch_geometric
 
 from datasets import DATASET_FOLDER
 
@@ -62,19 +63,17 @@ def read_struts() -> List[Tuple[int, int]]:
 
     return struts
 
-def read_inputs(augmentation: int=24) -> np.ndarray:
+def read_inputs(augmentations: int=None) -> np.ndarray:
     """Return input images as a 5D array with shape (number of samples, 1 channel, height, width, depth)."""
-
-    assert 1 <= augmentation <= 24 and type(augmentation) is int
     
     directory = os.path.join(DATASET_FOLDER, 'Input_Data')
     folders = next(os.walk(directory))[1]
     folders.sort(key=lambda folder: int(folder.split('_')[1]))
 
-    rotations, axes = cube_rotations(augmentation)
+    rotations, axes = cube_rotations(augmentations)
 
     data_type = np.uint8
-    inputs = np.empty((len(folders) * augmentation, 1, *INPUT_SHAPE), dtype=data_type)
+    inputs = np.empty((len(folders) * augmentations, 1, *INPUT_SHAPE), dtype=data_type)
 
     for i, folder in enumerate(folders):
         print(f"Reading images in {folder}...", end='\r')
@@ -95,10 +94,33 @@ def read_inputs(augmentation: int=24) -> np.ndarray:
 
     return inputs
 
-def read_outputs(augmentation: int=24) -> np.ndarray:
-    """Return output data as a 3D array with shape (number of samples, height of the adjacency matrix, width of the adjacency matrix)."""
+def read_outputs() -> List[List[Tuple[int, int]]]:
+    """Return nonzero-diameter output data as a list of lists of 2-tuples: (strut number, nonzero diameter)."""
+    
+    directory = os.path.join(DATASET_FOLDER, 'Output_Data')
 
-    assert 1 <= augmentation <= 24 and type(augmentation) is int
+    files = glob.glob(os.path.join(directory, '*.txt'))
+    files.sort(key=lambda file: int(os.path.basename(file).split('.')[0].split('_')[1]))
+
+    outputs = []
+
+    for i, file in enumerate(files):
+        print(f"Reading file {file}...", end='\r')
+
+        with open(file, 'r') as f:
+            # Ignore the header line and lines with zero diameters.
+            lines = [line for line in f.readlines()[1:] if float(line.strip().split(',')[1]) > 0]
+        
+        output = []
+        for line in lines:
+            strut, d = line.strip().split(',')
+            output.append((int(strut), float(d)))
+        outputs.append(output)
+
+    return outputs
+
+def read_outputs_as_adjacency(augmentations: int=None) -> np.ndarray:
+    """Return output data as a 3D array with shape (number of samples, height of the adjacency matrix, width of the adjacency matrix)."""
     
     directory = os.path.join(DATASET_FOLDER, 'Output_Data')
 
@@ -114,10 +136,10 @@ def read_outputs(augmentation: int=24) -> np.ndarray:
     strut_numbers = {strut: number for strut, number in zip(struts, range(1, len(struts)+1))}
     node_numbers = make_node_numbers()
 
-    rotations, axes = cube_rotations(augmentation)
+    rotations, axes = cube_rotations(augmentations)
     node_numbers_rotated = [np.rot90(np.rot90(np.rot90(node_numbers, x, axes[0]), y, axes[1]), z, axes[2]) for x, y, z in rotations]
 
-    outputs = np.zeros((len(files) * augmentation, h, w), dtype=np.float32)
+    outputs = np.zeros((len(files) * augmentations, h, w), dtype=np.float32)
     strut_counter = 0
 
     for i, file in enumerate(files):
@@ -191,16 +213,18 @@ def read_outputs_as_nodes() -> np.ndarray:
 
     return outputs
 
-def cube_rotations(count: int) -> Tuple[List[Tuple[int, int, int]], Tuple[Tuple[int, int]]]:
+def cube_rotations(count: int=None) -> Tuple[List[Tuple[int, int, int]], Tuple[Tuple[int, int]]]:
     """Return a list of the combinations of unique rotations for a 3D cube, along with the corresponding rotation axes.
 
     Inputs:
-    `count`: Integer [1, 24] representing how many rotations to return.
+    `count`: Integer [1, 24] representing how many rotations to return, or None to return all possible rotations.
 
     Outputs:
     `rotations`: List of 3-tuples of the number of rotations to perform in the first, second, and third directions.
     `axes`: Tuple of 2-tuples of the axes defining the plane to rotate in. The first 2-tuple in this tuple corresponds to the first item in each 3-tuple in `rotations`.
     """
+
+    assert 1 <= count <= 24 and type(count) is int
 
     a = np.arange(3**3).reshape([3]*3)
     rotated = []
@@ -219,8 +243,73 @@ def cube_rotations(count: int) -> Tuple[List[Tuple[int, int, int]], Tuple[Tuple[
                     rotations.append((x, y, z))
     
     assert rotations[0] == (0, 0, 0)
+
+    # Return the first count rotations only.
+    if count is not None:
+        rotations = rotations[:count]
     
-    return rotations[:count], axes
+    return rotations, axes
+
+def augment_inputs(inputs: np.ndarray, augmentations: int=None) -> np.ndarray:
+    rotations, axes = cube_rotations(augmentations)
+
+    for kx, ky, kz in rotations:
+        rotated = np.rot90(np.rot90(np.rot90(inputs, kx, axes[0]+2), ky, axes[1]+2), kz, axes[2]+2)
+        inputs = np.append(inputs, rotated, axis=0)
+
+    return inputs
+
+def augment_outputs(outputs: list, augmentations: int=None):
+    rotations, axes = cube_rotations(augmentations)
+
+    node_numbers = make_node_numbers()
+    struts = read_struts()
+
+    rotated_outputs = [outputs]
+
+    for kx, ky, kz in rotations:
+        rotated_node_numbers = np.rot90(np.rot90(np.rot90(node_numbers, kx, axes[0]), ky, axes[1]), kz, axes[2])
+
+        rotated = []
+
+        for output in outputs:
+            for strut, diameter in output:
+                node_1, node_2 = struts[strut-1]
+                
+                x1, y1, z1 = np.argwhere(rotated_node_numbers == node_1)[0, :]
+                x2, y2, z2 = np.argwhere(rotated_node_numbers == node_1)[0, :]
+                rotated_node_1 = node_numbers[x1, y1, z1]
+                rotated_node_2 = node_numbers[x2, y2, z2]
+
+                rotated_strut = struts.index((rotated_node_1, rotated_node_2)) + 1
+
+                rotated.append((rotated_strut, diameter))
+        
+        rotated_outputs.extend(outputs)
+
+    return rotated_outputs
+
+def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_geometric.data.Data]:
+    """Convert a 5D array of input data and a list of output data to a list of graphs."""
+
+    node_numbers = make_node_numbers()
+
+    graphs = []
+
+    for i in range(len(array.shape[0])):
+        indices = np.argwhere(array[i, 0, ...] > 0)
+
+        node_features = torch.empty([len(indices), ...])
+        node_coordinates = torch.empty([len(indices), 3])
+        edge_indices = torch.empty([2, ...])
+        labels = torch.zeros(...)
+
+        for x, y, z in indices:
+            node_number = node_numbers[x, y, z]
+            node_features[node_number - 1, :] = ...
+        
+        graph = torch_geometric.data.Data(x=node_features, edge_index=edge_indices, y=labels, pos=node_coordinates)
+        graphs.append(graph)
 
 
 if __name__ == "__main__":
@@ -229,7 +318,7 @@ if __name__ == "__main__":
     # with open('inputs.pickle', 'wb') as f:
     #     pickle.dump(inputs, f)
     
-    outputs = read_outputs(2)
+    outputs = read_outputs_as_adjacency(2)
     print(outputs.shape)
     # with open('outputs_lattice.pickle', 'wb') as f:
     #     pickle.dump(outputs, f)
