@@ -119,13 +119,11 @@ def read_outputs() -> List[List[Tuple[int, int]]]:
 
     return outputs
 
-def read_outputs_as_adjacency(augmentations: int=None) -> np.ndarray:
-    """Return output data as a 3D array with shape (number of samples, height of the adjacency matrix, width of the adjacency matrix)."""
-    
-    directory = os.path.join(DATASET_FOLDER, 'Output_Data')
+def convert_outputs_to_adjacency(outputs: list, augmentations: int=None) -> np.ndarray:
+    """Convert the given output data to a 3D array with shape (number of samples, height of the adjacency matrix, width of the adjacency matrix)."""
 
-    files = glob.glob(os.path.join(directory, '*.txt'))
-    files.sort(key=lambda file: int(os.path.basename(file).split('.')[0].split('_')[1]))
+    # Number of data.
+    n = len(outputs)
 
     # Height of the adjacency matrix, equal to the total number of nodes.
     h = int(np.prod(INPUT_SHAPE))
@@ -139,79 +137,71 @@ def read_outputs_as_adjacency(augmentations: int=None) -> np.ndarray:
     rotations, axes = cube_rotations(augmentations)
     node_numbers_rotated = [np.rot90(np.rot90(np.rot90(node_numbers, x, axes[0]), y, axes[1]), z, axes[2]) for x, y, z in rotations]
 
-    outputs = np.zeros((len(files) * augmentations, h, w), dtype=np.float32)
+    outputs = np.zeros((n * augmentations, h, w), dtype=np.float32)
     strut_counter = 0
 
-    for i, file in enumerate(files):
-        print(f"Reading file {file}...", end='\r')
+    for i, output in enumerate(outputs):
+        print(f"Processing output {i} of {n}...", end='\r')
 
-        with open(file, 'r') as f:
-            # Ignore the header line.
-            lines = f.readlines()[1:]
-        
-        for line in lines:
-            strut, d = line.strip().split(',')
-            strut, d = int(strut), float(d)
+        for strut, d in output:
+            strut_counter += 1
+            node_1, node_2 = struts[strut - 1]
 
-            if d > 0:
-                strut_counter += 1
-                node_1, node_2 = struts[strut - 1]
+            for j, node_numbers_ in enumerate(node_numbers_rotated):
+                x1, y1, z1 = np.argwhere(node_numbers_ == node_1)[0, :]
+                x2, y2, z2 = np.argwhere(node_numbers_ == node_2)[0, :]
+                node_1_rotated = node_numbers[x1, y1, z1]
+                node_2_rotated = node_numbers[x2, y2, z2]
 
-                for j, node_numbers_ in enumerate(node_numbers_rotated):
-                    x1, y1, z1 = np.argwhere(node_numbers_ == node_1)[0, :]
-                    x2, y2, z2 = np.argwhere(node_numbers_ == node_2)[0, :]
-                    node_1_rotated = node_numbers[x1, y1, z1]
-                    node_2_rotated = node_numbers[x2, y2, z2]
+                row = node_1_rotated - 1
+                column = (strut_numbers[(node_1_rotated, node_2_rotated)] - 1) % w
 
-                    row = node_1_rotated - 1
-                    column = (strut_numbers[(node_1_rotated, node_2_rotated)] - 1) % w
+                outputs[i + j*n, row, column] = d
 
-                    outputs[i + j*len(files), row, column] = d
-
-    print(f"\nDensity of adjacency matrix: {strut_counter / (len(files) * h * w)}")
+    print(f"\nDensity of adjacency matrix: {strut_counter / (n * h * w)}")
 
     outputs = torch.tensor(outputs)
 
     return outputs
 
-def read_outputs_as_nodes() -> np.ndarray:
-    """Return output data as a 5D array of 1s indicating nodes with shape (number of samples, 1 channel, height, width, depth)."""
+# def read_outputs_as_nodes() -> np.ndarray:
+#     """Return output data as a 5D array of 1s indicating nodes with shape (number of samples, 1 channel, height, width, depth)."""
     
-    directory = os.path.join(DATASET_FOLDER, 'Output_Data')
+#     directory = os.path.join(DATASET_FOLDER, 'Output_Data')
 
-    files = glob.glob(os.path.join(directory, '*.txt'))
-    files.sort(key=lambda file: int(os.path.basename(file).split('.')[0].split('_')[1]))
+#     files = glob.glob(os.path.join(directory, '*.txt'))
+#     files.sort(key=lambda file: int(os.path.basename(file).split('.')[0].split('_')[1]))
 
-    # Height of the adjacency matrix, equal to the total number of nodes, reduced to remove duplicate nodes.
-    h = int(np.prod([INPUT_SHAPE[i] - (3 - 1) for i in range(3)]))
-    # Width of the adjacency matrix, equal to the maximum number of struts per node.
-    w = STRUTS_PER_NODE
+#     # Height of the adjacency matrix, equal to the total number of nodes, reduced to remove duplicate nodes.
+#     h = int(np.prod([INPUT_SHAPE[i] - (3 - 1) for i in range(3)]))
+#     # Width of the adjacency matrix, equal to the maximum number of struts per node.
+#     w = STRUTS_PER_NODE
 
-    struts = read_struts()
-    nodes = read_coordinates()
+#     struts = read_struts()
+#     nodes = read_coordinates()
 
-    data_type = np.uint8
-    outputs = np.zeros([len(files), 1, *INPUT_SHAPE], dtype=data_type)
+#     data_type = np.uint8
+#     outputs = np.zeros([len(files), 1, *INPUT_SHAPE], dtype=data_type)
 
-    for i, file in enumerate(files):
-        print(f"Reading file {file}...", end='\r')
+#     for i, file in enumerate(files):
+#         print(f"Reading file {file}...", end='\r')
 
-        with open(file, 'r') as f:
-            # Ignore the header line.
-            _ = f.readline()
-            # Read all lines except the lines at the bottom containing duplicate struts.
-            for line in range(1, h*w + 1):
-                strut, d = f.readline().strip().split(',')
-                strut, d = int(strut), float(d)
+#         with open(file, 'r') as f:
+#             # Ignore the header line.
+#             _ = f.readline()
+#             # Read all lines except the lines at the bottom containing duplicate struts.
+#             for line in range(1, h*w + 1):
+#                 strut, d = f.readline().strip().split(',')
+#                 strut, d = int(strut), float(d)
 
-                if d > 0:
-                    for node in struts[strut - 1]:
-                        x, y, z = nodes[node]
-                        outputs[i, 0, x, y, z] = 1
+#                 if d > 0:
+#                     for node in struts[strut - 1]:
+#                         x, y, z = nodes[node]
+#                         outputs[i, 0, x, y, z] = 1
     
-    outputs = torch.tensor(outputs)
+#     outputs = torch.tensor(outputs)
 
-    return outputs
+#     return outputs
 
 def cube_rotations(count: int=None) -> Tuple[List[Tuple[int, int, int]], Tuple[Tuple[int, int]]]:
     """Return a list of the combinations of unique rotations for a 3D cube, along with the corresponding rotation axes.
@@ -292,12 +282,15 @@ def augment_outputs(outputs: list, augmentations: int=None):
 def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_geometric.data.Data]:
     """Convert a 5D array of input data and a list of output data to a list of graphs."""
 
+    assert inputs.shape[0] == len(outputs), f"Number of inputs and number of outputs do not match."
+    n = len(outputs)
+
     node_numbers = make_node_numbers()
 
     graphs = []
 
-    for i in range(len(array.shape[0])):
-        indices = np.argwhere(array[i, 0, ...] > 0)
+    for i in range(n):
+        indices = np.argwhere(inputs[i, 0, ...] > 0)
 
         node_features = torch.empty([len(indices), ...])
         node_coordinates = torch.empty([len(indices), 3])
@@ -318,7 +311,9 @@ if __name__ == "__main__":
     # with open('inputs.pickle', 'wb') as f:
     #     pickle.dump(inputs, f)
     
-    outputs = read_outputs_as_adjacency(2)
+    outputs = read_outputs()
+    # outputs = convert_outputs_to_adjacency(outputs)
+    outputs = convert_dataset_to_graph(outputs)
     print(outputs.shape)
     # with open('outputs_lattice.pickle', 'wb') as f:
     #     pickle.dump(outputs, f)
