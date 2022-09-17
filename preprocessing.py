@@ -136,7 +136,7 @@ def convert_outputs_to_adjacency(outputs: list, augmentations: int=None) -> np.n
     node_numbers = make_node_numbers()
 
     rotations, axes = cube_rotations(augmentations)
-    node_numbers_rotated = [np.rot90(np.rot90(np.rot90(node_numbers, x, axes[0]), y, axes[1]), z, axes[2]) for x, y, z in rotations]
+    node_numbers_rotated = [rotate_array(node_numbers, rotation, axes) for rotation in rotations]
 
     outputs = np.zeros((n * augmentations, h, w), dtype=np.float32)
     strut_counter = 0
@@ -166,7 +166,7 @@ def convert_outputs_to_adjacency(outputs: list, augmentations: int=None) -> np.n
     return outputs
 
 def cube_rotations(count: int=None) -> Tuple[List[Tuple[int, int, int]], Tuple[Tuple[int, int]]]:
-    """Return a list of the combinations of unique rotations for a 3D cube, along with the corresponding rotation axes.
+    """Return a list of the unique rotations for a 3D cube, along with the corresponding rotation axes.
 
     Inputs:
     `count`: Integer [1, 24] representing how many rotations to return, or None to return all possible rotations.
@@ -201,12 +201,23 @@ def cube_rotations(count: int=None) -> Tuple[List[Tuple[int, int, int]], Tuple[T
     
     return rotations, axes
 
+def rotate_array(array: np.ndarray, rotation: tuple, axes: tuple) -> np.ndarray:
+    """Rotate an array about the given axes the corresponding number of times."""
+    assert len(rotation) == len(axes)
+
+    for k, axis in zip(rotation, axes):
+        array = np.rot90(array, k, axis)
+
+    return array
+
 def augment_inputs(inputs: np.ndarray, augmentations: int=None) -> np.ndarray:
     rotations, axes = cube_rotations(augmentations)
 
-    for kx, ky, kz in rotations:
-        rotated = np.rot90(np.rot90(np.rot90(inputs, kx, axes[0]+2), ky, axes[1]+2), kz, axes[2]+2)
-        inputs = np.append(inputs, rotated, axis=0)
+    axes = tuple((dim_1+2, dim_2+2) for dim_1, dim_2 in axes)
+    inputs = np.concatenate(
+        [rotate_array(inputs, rotation, axes) for rotation in rotations],
+        axis=0,
+    )
 
     return inputs
 
@@ -218,11 +229,10 @@ def augment_outputs(outputs: list, augmentations: int=None):
 
     rotated_outputs = [outputs]
 
-    for kx, ky, kz in rotations:
-        rotated_node_numbers = np.rot90(np.rot90(np.rot90(node_numbers, kx, axes[0]), ky, axes[1]), kz, axes[2])
+    for rotation in rotations:
+        rotated_node_numbers = rotate_array(node_numbers, rotation, axes)
 
         rotated = []
-
         for output in outputs:
             for strut, diameter in output:
                 node_1, node_2 = struts[strut-1]
@@ -235,7 +245,6 @@ def augment_outputs(outputs: list, augmentations: int=None):
                 rotated_strut = struts.index((rotated_node_1, rotated_node_2)) + 1
 
                 rotated.append((rotated_strut, diameter))
-        
         rotated_outputs.extend(outputs)
 
     return rotated_outputs
@@ -304,6 +313,8 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
 
         graph = torch_geometric.data.Data(x=node_features, edge_index=edge_index, y=labels, pos=node_coordinates)
         graphs.append(graph)
+    
+    return graphs
 
 def mask_of_active_nodes(strut_numbers: list, struts: list, node_numbers: np.ndarray) -> np.ndarray:
     """Return a Boolean array of indicating which nodes are used for the given struts."""
