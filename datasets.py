@@ -9,7 +9,7 @@ from torch.utils.data import Dataset
 
 
 try:
-    from google.colab import drive
+    from google.colab import drive  # type: ignore
 except ImportError:
     DATASET_FOLDER = 'Training_Data_50'
 else:

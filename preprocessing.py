@@ -34,7 +34,7 @@ def read_coordinates() -> List[List[int]]:
     return coordinates
 
 def make_node_numbers() -> np.ndarray:
-    """Return a 3D array of node numbers defined in the text file."""
+    """Return a 3D array of node numbers starting from 1 defined in the text file."""
     
     filename = 'Input_Coords.txt'
     with open(os.path.join(DATASET_FOLDER, filename), 'r') as f:
@@ -63,20 +63,18 @@ def read_struts() -> List[Tuple[int, int]]:
 
     return struts
 
-def read_inputs(augmentations: int=None) -> np.ndarray:
+def read_inputs() -> np.ndarray:
     """Return input images as a 5D array with shape (number of samples, 1 channel, height, width, depth)."""
     
     directory = os.path.join(DATASET_FOLDER, 'Input_Data')
     folders = next(os.walk(directory))[1]
     folders.sort(key=lambda folder: int(folder.split('_')[1]))
 
-    rotations, axes = cube_rotations(augmentations)
-
     data_type = np.uint8
-    inputs = np.empty((len(folders) * augmentations, 1, *INPUT_SHAPE), dtype=data_type)
+    inputs = np.empty((len(folders), 1, *INPUT_SHAPE), dtype=data_type)
 
     for i, folder in enumerate(folders):
-        print(f"Reading images in {folder}...", end='\r')
+        print(f"Reading images in {folder}...", end='\r' if i < len(folders) - 1 else None)
 
         files = glob.glob(os.path.join(directory, folder, '*.jpg'))
         files.sort(key=lambda file: int(os.path.basename(file).split('.')[0].split('_')[1]))
@@ -85,10 +83,6 @@ def read_inputs(augmentations: int=None) -> np.ndarray:
         for d, file in enumerate(files):
             with Image.open(file) as f:
                 inputs[i, 0, ..., d] = np.asarray(f, dtype=data_type)
-    
-        # Augment the data by rotation.
-        for j, (x, y, z) in enumerate(rotations):
-            inputs[i + j * len(folders), 0, ...] = np.rot90(np.rot90(np.rot90(inputs[i, 0, ...], x, axes[0]), y, axes[1]), z, axes[2])
 
     inputs = torch.tensor(inputs)
 
@@ -107,7 +101,7 @@ def read_outputs() -> List[List[Tuple[int, int]]]:
     outputs = []
 
     for i, file in enumerate(files):
-        print(f"Reading file {file}...", end='\r')
+        print(f"Reading file {file}...", end='\r' if i < len(files) - 1 else None)
 
         with open(file, 'r') as f:
             # Ignore the header line and lines with zero diameters.
@@ -117,9 +111,10 @@ def read_outputs() -> List[List[Tuple[int, int]]]:
         unique_nodes = set()
         for line in lines:
             strut, d = line.strip().split(',')
-            nodes = sorted(struts[strut - 1])
+            strut, d = int(strut), float(d)
+            nodes = tuple(sorted(struts[strut - 1]))
             if nodes not in unique_nodes:
-                output.append((int(strut), float(d)))
+                output.append((strut, d))
             unique_nodes.add(nodes)
         outputs.append(output)
 
@@ -170,45 +165,6 @@ def convert_outputs_to_adjacency(outputs: list, augmentations: int=None) -> np.n
 
     return outputs
 
-# def read_outputs_as_nodes() -> np.ndarray:
-#     """Return output data as a 5D array of 1s indicating nodes with shape (number of samples, 1 channel, height, width, depth)."""
-    
-#     directory = os.path.join(DATASET_FOLDER, 'Output_Data')
-
-#     files = glob.glob(os.path.join(directory, '*.txt'))
-#     files.sort(key=lambda file: int(os.path.basename(file).split('.')[0].split('_')[1]))
-
-#     # Height of the adjacency matrix, equal to the total number of nodes, reduced to remove duplicate nodes.
-#     h = int(np.prod([INPUT_SHAPE[i] - (3 - 1) for i in range(3)]))
-#     # Width of the adjacency matrix, equal to the maximum number of struts per node.
-#     w = STRUTS_PER_NODE
-
-#     struts = read_struts()
-#     nodes = read_coordinates()
-
-#     data_type = np.uint8
-#     outputs = np.zeros([len(files), 1, *INPUT_SHAPE], dtype=data_type)
-
-#     for i, file in enumerate(files):
-#         print(f"Reading file {file}...", end='\r')
-
-#         with open(file, 'r') as f:
-#             # Ignore the header line.
-#             _ = f.readline()
-#             # Read all lines except the lines at the bottom containing duplicate struts.
-#             for line in range(1, h*w + 1):
-#                 strut, d = f.readline().strip().split(',')
-#                 strut, d = int(strut), float(d)
-
-#                 if d > 0:
-#                     for node in struts[strut - 1]:
-#                         x, y, z = nodes[node]
-#                         outputs[i, 0, x, y, z] = 1
-    
-#     outputs = torch.tensor(outputs)
-
-#     return outputs
-
 def cube_rotations(count: int=None) -> Tuple[List[Tuple[int, int, int]], Tuple[Tuple[int, int]]]:
     """Return a list of the combinations of unique rotations for a 3D cube, along with the corresponding rotation axes.
 
@@ -219,8 +175,6 @@ def cube_rotations(count: int=None) -> Tuple[List[Tuple[int, int, int]], Tuple[T
     `rotations`: List of 3-tuples of the number of rotations to perform in the first, second, and third directions.
     `axes`: Tuple of 2-tuples of the axes defining the plane to rotate in. The first 2-tuple in this tuple corresponds to the first item in each 3-tuple in `rotations`.
     """
-
-    assert 1 <= count <= 24 and type(count) is int
 
     a = np.arange(3**3).reshape([3]*3)
     rotated = []
@@ -242,6 +196,7 @@ def cube_rotations(count: int=None) -> Tuple[List[Tuple[int, int, int]], Tuple[T
 
     # Return the first count rotations only.
     if count is not None:
+        assert 1 <= count <= 24
         rotations = rotations[:count]
     
     return rotations, axes
@@ -297,63 +252,90 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
     graphs = []
 
     for i in range(n):
-        indices = np.argwhere(inputs[i, 0, ...] > 0)
+        mask = mask_of_active_nodes([_[0] for _ in outputs[i]], struts, node_numbers)
+        indices = np.argwhere(mask)
 
         number_nodes = indices.shape[0]
-        number_total_nodes = indices[i, 0, ...].numel()
-        number_edges = len(outputs[i])
-        
+        number_total_nodes = node_numbers.size
+
         # Node feature matrix with shape (number of nodes, number of features per node). Includes all possible nodes, not just the nodes with nonzero values, to avoid having to renumber nodes.
         node_features = torch.empty([number_total_nodes, 1])
         # Node coordinate matrix with shape (number of nodes, number of features per node).
         node_coordinates = torch.empty([number_total_nodes, 3])
-        # Graph connectivity matrix with shape (2, number of edges), where each column contains the two nodes that form an edge. Two edges in opposite directions must be used for each pair of nodes to make the graph undirected.
-        edge_indices = torch.empty([2, number_edges * 2])
-        # Edge labels with shape (number of edges, 1).
-        labels = torch.empty([number_edges, 1])
+        # List of edges as 2-tuples (node 1, node 2). Struts are formed within a 3x3x3 neighborhood.
+        edge_index = set()
         
         for x, y, z in indices:
-            node = node_numbers[x, y, z] - 1
+            node = node_numbers[x, y, z]
             # Insert density of each node.
-            node_features[node, 0] = inputs[i, 0, x, y, z]
+            node_features[node-1, 0] = inputs[i, 0, x, y, z]
             # Insert coordinates of each node.
-            node_coordinates[node, :] = [x, y, z]
+            node_coordinates[node-1, 0] = x
+            node_coordinates[node-1, 1] = y
+            node_coordinates[node-1, 2] = z
 
-        for edge, (strut, diameter) in enumerate(outputs[i]):
-            node_1, node_2 = struts[strut - 1]
-            # Insert edges.
-            edge_indices[:, edge*2] = [node_1 - 1, node_2 - 1]
-            edge_indices[:, edge*2 + 1] = [node_2 - 1, node_1 - 1]
-            # Insert diameter values for each strut.
+            # Insert edges for all valid struts.
+            r = 1
+            neighborhood = node_numbers[
+                max(0, x-r):min(INPUT_SHAPE[0], x+r+1),
+                max(0, y-r):min(INPUT_SHAPE[1], y+r+1),
+                max(0, z-r):min(INPUT_SHAPE[2], z+r+1),
+            ]
+            for x_, y_, z_ in np.argwhere(neighborhood):
+                node_2 = neighborhood[x_, y_, z_]
+                if node != node_2:
+                    edge_index.add(tuple(sorted((node, node_2))))
+        
+        # Each strut must be represented by two separate edges in opposite directions to make the graph undirected (both (1, 2) and (2, 1)).
+        edge_index = list(edge_index)
+        edge_index.extend([strut[::-1] for strut in edge_index])
+        # Dictionary of (strut, indices) pairs to reduce runtime by avoiding list search.
+        edge_index_mapping = {strut: index for index, strut in enumerate(edge_index)}
+
+        # Edge labels with shape (number of edges, 1).
+        labels = torch.zeros([len(edge_index)//2, 1])
+        for strut, diameter in outputs[i]:
+            edge = edge_index_mapping[struts[strut - 1]]
+            assert edge < (len(edge_index) / 2)
             labels[edge, 0] = diameter
 
-        graph = torch_geometric.data.Data(x=node_features, edge_index=edge_indices, y=labels, pos=node_coordinates)
-        assert not graph.has_isolated_nodes() and not graph.is_directed()
+        # Graph connectivity matrix transposed into shape (2, number of edges), where each column contains the two nodes that form an edge.
+        edge_index = np.array(edge_index).transpose()
+
+        graph = torch_geometric.data.Data(x=node_features, edge_index=edge_index, y=labels, pos=node_coordinates)
         graphs.append(graph)
+
+def mask_of_active_nodes(strut_numbers: list, struts: list, node_numbers: np.ndarray) -> np.ndarray:
+    """Return a Boolean array of indicating which nodes are used for the given struts."""
+    active_nodes = tuple({node for strut in strut_numbers for node in struts[strut - 1]})
+    mask = np.any(
+        node_numbers[..., None] == np.array(active_nodes),
+        axis=-1,
+    )
+    return mask
 
 
 if __name__ == "__main__":
-    # inputs = read_inputs()
-    # print(inputs.shape)
+    inputs = read_inputs()
     # # with open('inputs.pickle', 'wb') as f:
     # #     pickle.dump(inputs, f)
     
-    # outputs = read_outputs()
-    # # outputs = convert_outputs_to_adjacency(outputs)
-    # outputs = convert_dataset_to_graph(outputs)
+    outputs = read_outputs()
+    # outputs = convert_outputs_to_adjacency(outputs)
+    outputs = convert_dataset_to_graph(inputs[:1, ...], outputs)
 
-    # Visualize the neighborhood of a node
-    struts = read_struts()
-    node_numbers = make_node_numbers()
-    # struts = {tuple(sorted(strut)) for strut in struts}
-    struts = [strut for strut in struts if strut[0] == 50000]
-    nodes = set()
-    for strut in struts:
-        nodes.add(strut[0])
-        nodes.add(strut[1])
-    array = np.zeros_like(node_numbers)
-    for node in nodes:
-        array[node_numbers == node] = 1
-    # array = array[:10, :10, :10]
-    from visualization import plot_nodes
-    plot_nodes(array, 0.5)
+    # # Visualize the neighborhood of a node
+    # struts = read_struts()
+    # node_numbers = make_node_numbers()
+    # # struts = {tuple(sorted(strut)) for strut in struts}
+    # struts = [strut for strut in struts if strut[0] == 50000]
+    # nodes = set()
+    # for strut in struts:
+    #     nodes.add(strut[0])
+    #     nodes.add(strut[1])
+    # array = np.zeros_like(node_numbers)
+    # for node in nodes:
+    #     array[node_numbers == node] = 1
+    # # array = array[:10, :10, :10]
+    # from visualization import plot_nodes
+    # plot_nodes(array, 0.5)

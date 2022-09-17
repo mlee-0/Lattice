@@ -225,7 +225,7 @@ class LatticeGnn(torch.nn.Module):
         # Predict edge values (number of edges,).
         x = torch.sum(x[edge_index[0, :], :] * x[edge_index[1, :], :], dim=-1)
         # Average each pair of edges that represent the same strut (for example, (1, 2) and (2, 1)).
-        x = torch.mean(x.view([-1, x.size(-1)//2, 2]), dim=-1)
+        x = torch.mean(x.view([-1, 2, x.size(-1)//2]), dim=-1)
 
         # Constrain output values to [0, 1].
         x = torch.sigmoid(x)

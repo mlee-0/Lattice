@@ -152,9 +152,9 @@ def visualize_lattice(lattice: np.ndarray) -> None:
 
 
 if __name__ == "__main__":
-    with open('Training_Data_50/outputs.pickle', 'rb') as f:
-        outputs = f.load(f)
-    visualize_lattice(np.array(outputs[0, ...]))
+    with open('Training_Data_50/outputs_lattice.pickle', 'rb') as f:
+        outputs = pickle.load(f)
+    visualize_lattice(np.array(outputs[0, :, :]))
 
     # with open("Training_Data_50/outputs_nodes.pickle", 'rb') as f:
     #     nodes = pickle.load(f)
