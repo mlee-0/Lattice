@@ -5,17 +5,17 @@ import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 from datasets import *
+from preprocessing import *
 
 
-def plot_nodes(array: np.ndarray) -> None:
+def plot_nodes(array: np.ndarray, opacity: float=1.0) -> None:
     """Show a 3D plot of node locations."""
-    transparency = 1.0
 
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1, projection="3d")
     ax.voxels(
         filled=(array > 0),
-        facecolors=(1, 1, 1, transparency),
+        facecolors=(1, 1, 1, opacity),
         linewidth=0.25,
         edgecolors=(1, 1, 1),
     )

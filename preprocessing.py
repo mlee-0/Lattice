@@ -95,12 +95,14 @@ def read_inputs(augmentations: int=None) -> np.ndarray:
     return inputs
 
 def read_outputs() -> List[List[Tuple[int, int]]]:
-    """Return nonzero-diameter output data as a list of lists of 2-tuples: (strut number, nonzero diameter)."""
+    """Return nonzero-diameter output data as a list of lists of 2-tuples: (strut number, nonzero diameter). Duplicate struts are not included."""
     
     directory = os.path.join(DATASET_FOLDER, 'Output_Data')
 
     files = glob.glob(os.path.join(directory, '*.txt'))
     files.sort(key=lambda file: int(os.path.basename(file).split('.')[0].split('_')[1]))
+
+    struts = read_struts()
 
     outputs = []
 
@@ -112,9 +114,13 @@ def read_outputs() -> List[List[Tuple[int, int]]]:
             lines = [line for line in f.readlines()[1:] if float(line.strip().split(',')[1]) > 0]
         
         output = []
+        unique_nodes = set()
         for line in lines:
             strut, d = line.strip().split(',')
-            output.append((int(strut), float(d)))
+            nodes = sorted(struts[strut - 1])
+            if nodes not in unique_nodes:
+                output.append((int(strut), float(d)))
+            unique_nodes.add(nodes)
         outputs.append(output)
 
     return outputs
@@ -282,45 +288,72 @@ def augment_outputs(outputs: list, augmentations: int=None):
 def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_geometric.data.Data]:
     """Convert a 5D array of input data and a list of output data to a list of graphs."""
 
-    assert inputs.shape[0] == len(outputs), f"Number of inputs and number of outputs do not match."
+    assert inputs.shape[0] == len(outputs), f"Number of inputs {inputs.shape[0]} and number of outputs {len(outputs)} do not match."
     n = len(outputs)
 
     node_numbers = make_node_numbers()
+    struts = read_struts()
 
     graphs = []
 
     for i in range(n):
         indices = np.argwhere(inputs[i, 0, ...] > 0)
 
-        node_features = torch.empty([len(indices), ...])
-        node_coordinates = torch.empty([len(indices), 3])
-        edge_indices = torch.empty([2, ...])
-        labels = torch.zeros(...)
-
-        for x, y, z in indices:
-            node_number = node_numbers[x, y, z]
-            node_features[node_number - 1, :] = ...
+        number_nodes = indices.shape[0]
+        number_total_nodes = indices[i, 0, ...].numel()
+        number_edges = len(outputs[i])
         
+        # Node feature matrix with shape (number of nodes, number of features per node). Includes all possible nodes, not just the nodes with nonzero values, to avoid having to renumber nodes.
+        node_features = torch.empty([number_total_nodes, 1])
+        # Node coordinate matrix with shape (number of nodes, number of features per node).
+        node_coordinates = torch.empty([number_total_nodes, 3])
+        # Graph connectivity matrix with shape (2, number of edges), where each column contains the two nodes that form an edge. Two edges in opposite directions must be used for each pair of nodes to make the graph undirected.
+        edge_indices = torch.empty([2, number_edges * 2])
+        # Edge labels with shape (number of edges, 1).
+        labels = torch.empty([number_edges, 1])
+        
+        for x, y, z in indices:
+            node = node_numbers[x, y, z] - 1
+            # Insert density of each node.
+            node_features[node, 0] = inputs[i, 0, x, y, z]
+            # Insert coordinates of each node.
+            node_coordinates[node, :] = [x, y, z]
+
+        for edge, (strut, diameter) in enumerate(outputs[i]):
+            node_1, node_2 = struts[strut - 1]
+            # Insert edges.
+            edge_indices[:, edge*2] = [node_1 - 1, node_2 - 1]
+            edge_indices[:, edge*2 + 1] = [node_2 - 1, node_1 - 1]
+            # Insert diameter values for each strut.
+            labels[edge, 0] = diameter
+
         graph = torch_geometric.data.Data(x=node_features, edge_index=edge_indices, y=labels, pos=node_coordinates)
+        assert not graph.has_isolated_nodes() and not graph.is_directed()
         graphs.append(graph)
 
 
 if __name__ == "__main__":
-    inputs = read_inputs()
-    print(inputs.shape)
-    # with open('inputs.pickle', 'wb') as f:
-    #     pickle.dump(inputs, f)
+    # inputs = read_inputs()
+    # print(inputs.shape)
+    # # with open('inputs.pickle', 'wb') as f:
+    # #     pickle.dump(inputs, f)
     
-    outputs = read_outputs()
-    # outputs = convert_outputs_to_adjacency(outputs)
-    outputs = convert_dataset_to_graph(outputs)
-    print(outputs.shape)
-    # with open('outputs_lattice.pickle', 'wb') as f:
-    #     pickle.dump(outputs, f)
-    
-    # with open('outputs_lattice.pickle', 'rb') as f:
-    #     outputs = pickle.load(f)
-    # print('done')
-    # # outputs = outputs.to(torch.float16)
-    # with open('outputs_lattice_sparse.pickle', 'wb') as f:
-    #     pickle.dump(outputs.to_sparse_coo(), f)
+    # outputs = read_outputs()
+    # # outputs = convert_outputs_to_adjacency(outputs)
+    # outputs = convert_dataset_to_graph(outputs)
+
+    # Visualize the neighborhood of a node
+    struts = read_struts()
+    node_numbers = make_node_numbers()
+    # struts = {tuple(sorted(strut)) for strut in struts}
+    struts = [strut for strut in struts if strut[0] == 50000]
+    nodes = set()
+    for strut in struts:
+        nodes.add(strut[0])
+        nodes.add(strut[1])
+    array = np.zeros_like(node_numbers)
+    for node in nodes:
+        array[node_numbers == node] = 1
+    # array = array[:10, :10, :10]
+    from visualization import plot_nodes
+    plot_nodes(array, 0.5)
