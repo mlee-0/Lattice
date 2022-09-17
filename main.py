@@ -9,7 +9,7 @@ import torch
 from torch import nn
 from torch.utils.data import Dataset, Subset, DataLoader
 
-from datasets import LatticeDataset
+from datasets import *
 import metrics
 from models import *
 

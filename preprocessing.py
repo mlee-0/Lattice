@@ -120,7 +120,7 @@ def read_outputs() -> List[List[Tuple[int, int]]]:
 
     return outputs
 
-def convert_outputs_to_adjacency(outputs: list, augmentations: int=None) -> np.ndarray:
+def convert_outputs_to_adjacency(outputs: list) -> np.ndarray:
     """Convert the given output data to a 3D array with shape (number of samples, height of the adjacency matrix, width of the adjacency matrix)."""
 
     # Number of data.
@@ -132,38 +132,28 @@ def convert_outputs_to_adjacency(outputs: list, augmentations: int=None) -> np.n
     w = STRUTS_PER_NODE
 
     struts = read_struts()
-    strut_numbers = {strut: number for strut, number in zip(struts, range(1, len(struts)+1))}
-    node_numbers = make_node_numbers()
+    strut_indices = {strut: index for index, strut in enumerate(struts)}
 
-    rotations, axes = cube_rotations(augmentations)
-    node_numbers_rotated = [rotate_array(node_numbers, rotation, axes) for rotation in rotations]
-
-    outputs = np.zeros((n * augmentations, h, w), dtype=np.float32)
+    adjacency = np.zeros((n, h, w), dtype=np.float32)
     strut_counter = 0
 
     for i, output in enumerate(outputs):
-        print(f"Processing output {i} of {n}...", end='\r')
+        print(f"Processing output {i+1} of {n}...", end='\r')
 
         for strut, d in output:
             strut_counter += 1
             node_1, node_2 = struts[strut - 1]
 
-            for j, node_numbers_ in enumerate(node_numbers_rotated):
-                x1, y1, z1 = np.argwhere(node_numbers_ == node_1)[0, :]
-                x2, y2, z2 = np.argwhere(node_numbers_ == node_2)[0, :]
-                node_1_rotated = node_numbers[x1, y1, z1]
-                node_2_rotated = node_numbers[x2, y2, z2]
+            row = node_1 - 1
+            column = strut_indices[struts[strut - 1]] % w
 
-                row = node_1_rotated - 1
-                column = (strut_numbers[(node_1_rotated, node_2_rotated)] - 1) % w
-
-                outputs[i + j*n, row, column] = d
+            adjacency[i, row, column] = d
 
     print(f"\nDensity of adjacency matrix: {strut_counter / (n * h * w)}")
 
-    outputs = torch.tensor(outputs)
+    adjacency = torch.tensor(adjacency)
 
-    return outputs
+    return adjacency
 
 def cube_rotations(count: int=None) -> Tuple[List[Tuple[int, int, int]], Tuple[Tuple[int, int]]]:
     """Return a list of the unique rotations for a 3D cube, along with the corresponding rotation axes.
@@ -228,14 +218,13 @@ def augment_outputs(outputs: list, augmentations: int=None):
     struts = read_struts()
 
     rotated_outputs = [outputs]
-
-    for rotation in rotations:
+    for rotation in rotations[1:]:
         rotated_node_numbers = rotate_array(node_numbers, rotation, axes)
 
         rotated = []
         for output in outputs:
             for strut, diameter in output:
-                node_1, node_2 = struts[strut-1]
+                node_1, node_2 = struts[strut - 1]
                 
                 x1, y1, z1 = np.argwhere(rotated_node_numbers == node_1)[0, :]
                 x2, y2, z2 = np.argwhere(rotated_node_numbers == node_1)[0, :]
@@ -245,7 +234,7 @@ def augment_outputs(outputs: list, augmentations: int=None):
                 rotated_strut = struts.index((rotated_node_1, rotated_node_2)) + 1
 
                 rotated.append((rotated_strut, diameter))
-        rotated_outputs.extend(outputs)
+        rotated_outputs.extend(rotated)
 
     return rotated_outputs
 
@@ -327,7 +316,7 @@ def mask_of_active_nodes(strut_numbers: list, struts: list, node_numbers: np.nda
 
 
 if __name__ == "__main__":
-    inputs = read_inputs()
+    # inputs = read_inputs()
     # # with open('inputs.pickle', 'wb') as f:
     # #     pickle.dump(inputs, f)
     
