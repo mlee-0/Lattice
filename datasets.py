@@ -5,7 +5,8 @@ import os
 import pickle
 import time
 
-from torch.utils.data import Dataset
+import torch
+import torch_geometric
 
 
 try:
@@ -17,7 +18,7 @@ else:
     DATASET_FOLDER = 'drive/My Drive/Lattice'
 
 
-class LatticeDataset(Dataset):
+class CnnDataset(torch.utils.data.Dataset):
     def __init__(self, count: int=None) -> None:
         """
         `count`: The number of data to use, or None to use the entire dataset.
@@ -26,18 +27,20 @@ class LatticeDataset(Dataset):
         time_start = time.time()
         
         with open(os.path.join(DATASET_FOLDER, 'inputs.pickle'), 'rb') as f:
-            self.inputs = pickle.load(f)
-            if count:
-                self.inputs = self.inputs[:count, ...]
-        with open(os.path.join(DATASET_FOLDER, 'outputs_lattice.pickle'), 'rb') as f:
-            self.outputs = pickle.load(f)
-            if count:
-                self.outputs = self.outputs[:count, ...]
+            self.inputs = pickle.load(f).float()
+        with open(os.path.join(DATASET_FOLDER, 'outputs_adjacency.pickle'), 'rb') as f:
+            self.outputs = pickle.load(f).float()
+        
+        if count is not None:
+            self.inputs = self.inputs[:count, ...]
+            self.outputs = self.outputs[:count, ...]
 
-        # Remove density values outside the predefined volume of space.
-        with open(os.path.join(DATASET_FOLDER, 'outputs_nodes.pickle'), 'rb') as f:
-            nodes = pickle.load(f)
-        self.inputs[nodes == 0] = 0
+        assert self.inputs.shape[0] == self.outputs.shape[0]
+
+        # # Remove density values outside the predefined volume of space.
+        # with open(os.path.join(DATASET_FOLDER, 'outputs_nodes.pickle'), 'rb') as f:
+        #     nodes = pickle.load(f)
+        # self.inputs[nodes == 0] = 0
         
         time_end = time.time()
         print(f"Loaded dataset in {round(time_end - time_start)} seconds.")
@@ -48,15 +51,17 @@ class LatticeDataset(Dataset):
     def __getitem__(self, index):
         return self.inputs[index, ...], self.outputs[index, ...]
 
-class NodeDataset(Dataset):
-    def __init__(self) -> None:
-        with open(os.path.join(DATASET_FOLDER, 'inputs.pickle'), 'rb') as f:
-            self.inputs = pickle.load(f)
-        with open(os.path.join(DATASET_FOLDER, 'outputs_nodes.pickle'), 'rb') as f:
-            self.outputs = pickle.load(f)
-
+class GnnDataset(torch_geometric.data.Dataset):
+    def __init__(self, count: int=None) -> None:
+        with open(os.path.join(DATASET_FOLDER, 'outputs_graph.pickle'), 'rb') as f:
+            self.dataset = pickle.load(f)
+        
+        if count is not None:
+            self.dataset = self.dataset[:count]
+        
     def __len__(self) -> int:
-        return len(self.inputs)
+        return len(self.dataset)
 
     def __getitem__(self, index):
-        return self.inputs[index, ...], self.outputs[index, ...]
+        # Returning x, edge_index, y individually results in incorrect batching.
+        return self.dataset[index]

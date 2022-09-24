@@ -63,12 +63,15 @@ def read_struts() -> List[Tuple[int, int]]:
 
     return struts
 
-def read_inputs() -> np.ndarray:
+def read_inputs(count: int=None) -> np.ndarray:
     """Return input images as a 5D array with shape (number of samples, 1 channel, height, width, depth)."""
     
     directory = os.path.join(DATASET_FOLDER, 'Input_Data')
     folders = next(os.walk(directory))[1]
     folders.sort(key=lambda folder: int(folder.split('_')[1]))
+
+    if count is not None:
+        folders = folders[:count]
 
     data_type = np.uint8
     inputs = np.empty((len(folders), 1, *INPUT_SHAPE), dtype=data_type)
@@ -88,13 +91,16 @@ def read_inputs() -> np.ndarray:
 
     return inputs
 
-def read_outputs() -> List[List[Tuple[int, int]]]:
+def read_outputs(count: int=None) -> List[List[Tuple[int, int]]]:
     """Return nonzero-diameter output data as a list of lists of 2-tuples: (strut number, nonzero diameter). Duplicate struts are not included."""
     
     directory = os.path.join(DATASET_FOLDER, 'Output_Data')
 
     files = glob.glob(os.path.join(directory, '*.txt'))
     files.sort(key=lambda file: int(os.path.basename(file).split('.')[0].split('_')[1]))
+
+    if count is not None:
+        files = files[:count]
 
     struts = read_struts()
 
@@ -287,20 +293,24 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
         # Each strut must be represented by two separate edges in opposite directions to make the graph undirected (both (1, 2) and (2, 1)).
         edge_index = list(edge_index)
         edge_index.extend([strut[::-1] for strut in edge_index])
-        # Dictionary of (strut, indices) pairs to reduce runtime by avoiding list search.
-        edge_index_mapping = {strut: index for index, strut in enumerate(edge_index)}
+        # Dictionary of (strut, indices) pairs to reduce runtime by avoiding list search. Excludes the duplicate struts.
+        edge_index_mapping = {strut: index for index, strut in enumerate(edge_index[:len(edge_index)//2])}
 
         # Edge labels with shape (number of edges, 1).
         labels = torch.zeros([len(edge_index)//2, 1])
         for strut, diameter in outputs[i]:
             edge = edge_index_mapping[struts[strut - 1]]
-            assert edge < (len(edge_index) / 2)
             labels[edge, 0] = diameter
 
         # Graph connectivity matrix transposed into shape (2, number of edges), where each column contains the two nodes that form an edge.
-        edge_index = np.array(edge_index).transpose()
+        edge_index = torch.tensor(edge_index, dtype=torch.int64).T
 
-        graph = torch_geometric.data.Data(x=node_features, edge_index=edge_index, y=labels, pos=node_coordinates)
+        graph = torch_geometric.data.Data(
+            x=node_features,
+            edge_index=edge_index,
+            y=labels,
+            pos=node_coordinates,
+        )
         graphs.append(graph)
     
     return graphs
@@ -316,13 +326,15 @@ def mask_of_active_nodes(strut_numbers: list, struts: list, node_numbers: np.nda
 
 
 if __name__ == "__main__":
-    # inputs = read_inputs()
-    # # with open('inputs.pickle', 'wb') as f:
-    # #     pickle.dump(inputs, f)
+    # inputs = read_inputs(count=10)
+    # with open('inputs.pickle', 'wb') as f:
+    #     pickle.dump(inputs, f)
     
-    outputs = read_outputs()
+    outputs = read_outputs(count=10)
     # outputs = convert_outputs_to_adjacency(outputs)
-    outputs = convert_dataset_to_graph(inputs[:1, ...], outputs)
+    outputs = convert_dataset_to_graph(inputs, outputs)
+    with open('Training_Data_50/outputs_graph.pickle', 'wb') as f:
+        pickle.dump(outputs, f)
 
     # # Visualize the neighborhood of a node
     # struts = read_struts()
