@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import Dataset, Subset, DataLoader
+import torch_geometric
 
 from datasets import *
 import metrics
@@ -66,7 +67,7 @@ def load_model(filepath: str, device: str) -> dict:
 def train_regression(
     device: str, epoch_count: int, checkpoint: dict, filepath_model: str, save_model_every: int,
     model: nn.Module, optimizer: torch.optim.Optimizer, loss_function: nn.Module,
-    train_dataloader: DataLoader, validate_dataloader: DataLoader,
+    dataset, train_dataloader: DataLoader, validate_dataloader: DataLoader,
     scheduler = None,
     queue=None, queue_to_main=None, info_gui: dict=None,
 ) -> nn.Module:
@@ -107,12 +108,16 @@ def train_regression(
         model.train(True)
         loss = 0
 
-        for batch, (input_data, label_data) in enumerate(train_dataloader, 1):
-            input_data = input_data.to(device).float()
-            label_data = label_data.to(device).float()
-            
-            # Predict an output from the model with the given input.
-            output_data = model(input_data)
+        for batch, data in enumerate(train_dataloader, 1):
+            if isinstance(dataset, torch_geometric.data.Dataset):
+                input_data = data.x.to(device)
+                edge_index = data.edge_index.to(device).type(torch.int64)
+                label_data = data.y.to(device)
+                output_data = model(input_data, edge_index)
+            else:
+                input_data = data[0].to(device)
+                label_data = data[1].to(device)
+                output_data = model(input_data)
             # Calculate the loss.
             loss_current = loss_function(output_data, label_data)
             loss += loss_current.item()
@@ -159,10 +164,16 @@ def train_regression(
         outputs = []
         labels = []
         with torch.no_grad():
-            for batch, (input_data, label_data) in enumerate(validate_dataloader, 1):
-                input_data = input_data.to(device).float()
-                label_data = label_data.to(device).float()
-                output_data = model(input_data)
+            for batch, data in enumerate(validate_dataloader, 1):
+                if isinstance(dataset, torch_geometric.data.Dataset):
+                    input_data = data.x.to(device)
+                    edge_index = data.edge_index.to(device).type(torch.int64)
+                    label_data = data.y.to(device)
+                    output_data = model(input_data, edge_index)
+                else:
+                    input_data = data[0].to(device)
+                    label_data = data[1].to(device)
+                    output_data = model(input_data)
                 loss += loss_function(output_data, label_data).item()
 
                 # Convert to NumPy arrays for evaluation metric calculations.
@@ -172,7 +183,7 @@ def train_regression(
                 outputs.append(output_data)
                 labels.append(label_data)
 
-                if batch % 50 == 0:
+                if batch % 1 == 0:
                     print(f"Batch {batch}/{len(validate_dataloader)}...", end="\r")
                     if queue:
                         info_gui["progress_batch"] = (len(train_dataloader)+batch, len(train_dataloader)+len(validate_dataloader))
@@ -259,10 +270,16 @@ def test_regression(
     labels = []
 
     with torch.no_grad():
-        for batch, (input_data, label_data) in enumerate(test_dataloader, 1):
-            input_data = input_data.to(device).float()
-            label_data = label_data.to(device).float()
-            output_data = model(input_data)
+        for batch, data in enumerate(test_dataloader, 1):
+            if isinstance(dataset, torch_geometric.data.Dataset):
+                input_data = data.x.to(device)
+                edge_index = data.edge_index.to(device).type(torch.int64)
+                label_data = data.y.to(device)
+                output_data = model(input_data, edge_index)
+            else:
+                input_data = data[0].to(device)
+                label_data = data[1].to(device)
+                output_data = model(input_data)
             loss += loss_function(output_data, label_data).item()
 
             # Convert to NumPy arrays for evaluation metric calculations.
@@ -315,9 +332,8 @@ def evaluate_regression(outputs: np.ndarray, labels: np.ndarray, inputs: np.ndar
 
 
 def main(
-    epoch_count: int, learning_rate: float, decay_learning_rate: bool, batch_sizes: Tuple[int, int, int], training_split: Tuple[float, float, float], Model: nn.Module,
+    epoch_count: int, learning_rate: float, decay_learning_rate: bool, batch_sizes: Tuple[int, int, int], training_split: Tuple[float, float, float], dataset: Dataset, Model: nn.Module,
     filename_model: str, train_existing: bool, save_model_every: int,
-    dataset: Dataset,
     train: bool, test: bool, evaluate: bool,
     Optimizer: torch.optim.Optimizer = torch.optim.SGD, Loss: nn.Module = nn.MSELoss,
     queue: Queue = None, queue_to_main: Queue = None,
@@ -334,13 +350,13 @@ def main(
     `epoch_count`: Number of epochs to train.
     `learning_rate`: Learning rate for the optimizer.
     `batch_sizes`: Tuple of batch sizes for the training, validation, and testing datasets.
+    `training_split`: A tuple of three floats in [0, 1] of the training, validation, and testing ratios.
+    `dataset`: The Dataset to train on.
+    `filename_model`: Name of the .pth file to load and save to during training.
     `Model`: A Module subclass to instantiate, not an instance of the class.
     `Optimizer`: An Optimizer subclass to instantiate, not an instance of the class.
     `Loss`: A Module subclass to instantiate, not an instance of the class.
 
-    `dataset`: The Dataset to train on.
-    `training_split`: A tuple of three floats in [0, 1] of the training, validation, and testing ratios.
-    `filename_model`: Name of the .pth file to load and save to during training.
     
     `queue`: A Queue used to send information to the GUI.
     `queue_to_main`: A Queue used to receive information from the GUI.
@@ -377,12 +393,12 @@ def main(
     print(f"Split {sample_size:,} samples into {train_size:,} training / {validate_size:,} validation / {test_size:,} testing.")
 
     batch_size_train, batch_size_validate, batch_size_test = batch_sizes
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size_train, shuffle=True)
-    validate_dataloader = DataLoader(validate_dataset, batch_size=batch_size_validate, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size_test, shuffle=False)    
+    train_dataloader = torch_geometric.loader.DataLoader(train_dataset, batch_size=batch_size_train, shuffle=True)
+    validate_dataloader = torch_geometric.loader.DataLoader(validate_dataset, batch_size=batch_size_validate, shuffle=True)
+    test_dataloader = torch_geometric.loader.DataLoader(test_dataset, batch_size=batch_size_test, shuffle=False)
 
     # Initialize the model, optimizer, and loss function.
-    model = Model()
+    model = Model(device)
     model.to(device)
     optimizer = Optimizer(model.parameters(), lr=learning_rate)
     if decay_learning_rate:
@@ -419,6 +435,7 @@ def main(
             model = model,
             optimizer = optimizer,
             loss_function = loss_function,
+            dataset = dataset,
             train_dataloader = train_dataloader,
             validate_dataloader = validate_dataloader,
             scheduler = scheduler,
@@ -449,16 +466,16 @@ if __name__ == "__main__":
         "train_existing": not True,
         "save_model_every": 5,
 
-        "epoch_count": 5,
+        "epoch_count": 1,
         "learning_rate": 1e-2,
         "decay_learning_rate": not True,
-        "batch_sizes": (8, 64, 64),
+        "batch_sizes": (1, 64, 64),
         "training_split": (0.8, 0.1, 0.1),
-        "Model": LatticeCnn,
+        
+        "dataset": GnnDataset(4),
+        "Model": LatticeGnn,
         "Optimizer": torch.optim.SGD,
         "Loss": nn.MSELoss,
-        
-        "dataset": LatticeDataset(),
         
         "train": True,
         "test": True,
