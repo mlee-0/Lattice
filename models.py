@@ -18,13 +18,14 @@ class LatticeCnn(torch.nn.Module):
 
         h = w = d = 51
         input_channels = 2
-        strut_neighborhood = (3, 3, 3)
+        strut_neighborhood = 3
+        strut_neighborhood_radius = (strut_neighborhood - 1) / 2
 
         self.index_channel = torch.arange(h*w*d).reshape((1, 1, h, w, d)).to('cpu').float()
         self.index_channel /= self.index_channel.max() * 255
 
         # Number of output channels in the first layer.
-        c = 1
+        c = 32
 
         # Parameters for all convolution layers.
         k = 3
@@ -33,10 +34,10 @@ class LatticeCnn(torch.nn.Module):
 
         # Output size, representing the maximum number of struts possible.
         self.shape_output = (
-            h * w * d,
-            np.prod(strut_neighborhood) - 1,
+            int((h-strut_neighborhood_radius) * (w-strut_neighborhood_radius) * (d-strut_neighborhood_radius)),
+            int((strut_neighborhood_radius+1) ** 3 - 1),
         )
-        size_output = np.prod(self.shape_output)
+        size_output = int(np.prod(self.shape_output))
 
         self.convolution_1 = torch.nn.Sequential(
             torch.nn.Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=k, stride=s, padding=p),
