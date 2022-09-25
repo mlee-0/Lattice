@@ -256,6 +256,8 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
     graphs = []
 
     for i in range(n):
+        print(f"Processing output {i+1} of {n}...", end='\r')
+
         mask = mask_of_active_nodes([_[0] for _ in outputs[i]], struts, node_numbers)
         indices = np.argwhere(mask)
 
@@ -263,7 +265,7 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
         number_total_nodes = node_numbers.size
 
         # Node feature matrix with shape (number of nodes, number of features per node). Includes all possible nodes, not just the nodes with nonzero values, to avoid having to renumber nodes.
-        node_features = torch.empty([number_total_nodes, 1])
+        node_features = torch.zeros([number_total_nodes, 1])
         # Node coordinate matrix with shape (number of nodes, number of features per node).
         node_coordinates = torch.empty([number_total_nodes, 3])
         # List of edges as 2-tuples (node 1, node 2). Struts are formed within a 3x3x3 neighborhood.
@@ -271,8 +273,8 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
         
         for x, y, z in indices:
             node = node_numbers[x, y, z]
-            # Insert density of each node.
-            node_features[node-1, 0] = inputs[i, 0, x, y, z]
+            # Insert density [0, 1] of each node.
+            node_features[node-1, 0] = inputs[i, 0, x, y, z] / 255
             # Insert coordinates of each node.
             node_coordinates[node-1, 0] = x
             node_coordinates[node-1, 1] = y

@@ -63,5 +63,5 @@ class GnnDataset(torch_geometric.data.Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        # Returning x, edge_index, y individually results in incorrect batching.
+        # Return the entire graph. Returning individual attributes (x, edge_index, y) results in incorrect batching.
         return self.dataset[index]

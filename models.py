@@ -155,34 +155,31 @@ class LatticeGnn(torch.nn.Module):
         input_channels = 1
 
         # Model size, defined as the number of output channels in the first layer. Numbers of channels in subsequent layers are multiples of this number, so this number controls the overall model size.
-        c = 8
+        c = 2
 
         self.convolution = torch_geometric.nn.Sequential('x, edge_index', [
-            (torch_geometric.nn.GCNConv(in_channels=input_channels, out_channels=c*1, add_self_loops=False), 'x, edge_index -> x'),
+            (torch_geometric.nn.GCNConv(in_channels=input_channels, out_channels=c*1), 'x, edge_index -> x'),
             torch.nn.ReLU(),
-            (torch_geometric.nn.GCNConv(in_channels=c*1, out_channels=c*2, add_self_loops=False), 'x, edge_index -> x'),
+            # (torch_geometric.nn.GCNConv(in_channels=c*1, out_channels=c*2), 'x, edge_index -> x'),
             # torch.nn.ReLU(),
-            # (torch_geometric.nn.GCNConv(in_channels=c*2, out_channels=c*4, add_self_loops=False), 'x, edge_index -> x'),
+            # (torch_geometric.nn.GCNConv(in_channels=c*2, out_channels=c*4), 'x, edge_index -> x'),
         ])
     
     def forward(self, x, edge_index):
         # Predict node embeddings with shape (total number of nodes across batch, number of node features).
         x = self.convolution(x, edge_index)
-        print(torch.mean(x).item(), torch.min(x).item(), torch.max(x).item())
 
         # Predict edge values with shape (number of edges across batch,).
         x = torch.sum(
-            (x[edge_index[0, :], :] + x[edge_index[1, :], :]) / 2,
+            x[edge_index[0, :], :] + x[edge_index[1, :], :],
             dim=-1,
         )
-        print(torch.mean(x).item(), torch.min(x).item(), torch.max(x).item())
         # Average each pair of edges that represent the same strut (for example, (1, 2) and (2, 1)) with shape (half the original number of edges, 1). The second dimension is included for compatibility with the labels used during training.
         x = torch.mean(x.view([2, x.size(-1)//2]), dim=0)[:, None]
+        # x = x[:x.size(-1)//2][:, None]
 
         # Constrain output values to [0, 1].
         x = torch.sigmoid(x)
-        # print(x.T)
-        # print([torch.mean(_) for _ in self.parameters()])
 
         return x
 
