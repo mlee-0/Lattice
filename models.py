@@ -49,16 +49,19 @@ class LatticeCnn(torch.nn.Module):
             torch.nn.BatchNorm3d(c*2),
             torch.nn.ReLU(inplace=True),
         )
-        # self.convolution_3 = torch.nn.Sequential(
-        #     torch.nn.Conv3d(in_channels=c*2, out_channels=c*4, kernel_size=k, stride=s, padding=p),
-        #     torch.nn.BatchNorm3d(c*4),
-        #     torch.nn.ReLU(inplace=True),
-        # )
-        self.convolution_final = torch.nn.Sequential(
-            torch.nn.Conv3d(in_channels=c*2, out_channels=size_output, kernel_size=k, stride=s, padding=p),
+        self.convolution_3 = torch.nn.Sequential(
+            torch.nn.Conv3d(in_channels=c*2, out_channels=c*4, kernel_size=k, stride=s, padding=p),
+            torch.nn.BatchNorm3d(c*4),
+            torch.nn.ReLU(inplace=True),
+        )
+        # Convolutional layer to increase the number of channels.
+        self.convolution_bottleneck = torch.nn.Sequential(
+            torch.nn.Conv3d(in_channels=c*4, out_channels=size_output, kernel_size=1, stride=1, padding='same'),
         )
 
         self.global_pooling = torch.nn.AdaptiveAvgPool3d(output_size=(1, 1, 1))
+
+
         # # Size of output of all convolution layers.
         # shape_convolution = self.convolution_final(self.convolution_2(self.convolution_1(torch.empty((1, input_channels, h, w, d))))).size()
         # size_convolution = np.prod(shape_convolution[1:])
@@ -71,10 +74,9 @@ class LatticeCnn(torch.nn.Module):
 
         x = self.convolution_1(x)
         x = self.convolution_2(x)
-        # x = self.convolution_3(x)
-        x = self.convolution_final(x)
+        x = self.convolution_3(x)
+        x = self.convolution_bottleneck(x)
 
-        # x = self.linear(x.view(batch_size, -1))
         x = self.global_pooling(x)
         x = torch.sigmoid(x)
 
