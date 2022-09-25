@@ -279,8 +279,6 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
 
         # Node feature matrix with shape (number of nodes, number of features per node). Includes all possible nodes, not just the nodes with nonzero values, to avoid having to renumber nodes.
         node_features = torch.zeros([number_total_nodes, 1])
-        # Node coordinate matrix with shape (number of nodes, number of features per node).
-        node_coordinates = torch.empty([number_total_nodes, 3])
         # List of edges as 2-tuples (node 1, node 2). Struts are formed within a 3x3x3 neighborhood.
         edge_index = set()
         
@@ -289,9 +287,9 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
             # Insert density [0, 1] of each node.
             node_features[node-1, 0] = inputs[i, 0, x, y, z] / 255
             # Insert coordinates of each node.
-            node_coordinates[node-1, 0] = x
-            node_coordinates[node-1, 1] = y
-            node_coordinates[node-1, 2] = z
+            node_features[node-1, 1] = x / (INPUT_SHAPE[0] - 1)
+            node_features[node-1, 2] = y / (INPUT_SHAPE[1] - 1)
+            node_features[node-1, 3] = z / (INPUT_SHAPE[2] - 1)
 
             # Insert edges for all valid struts.
             r = 1
@@ -324,7 +322,6 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
             x=node_features,
             edge_index=edge_index,
             y=labels,
-            pos=node_coordinates,
         )
         graphs.append(graph)
     
@@ -341,14 +338,14 @@ def mask_of_active_nodes(strut_numbers: list, struts: list, node_numbers: np.nda
 
 
 if __name__ == "__main__":
-    # inputs = read_inputs(count=10)
-    # with open('inputs.pickle', 'wb') as f:
+    # inputs = read_inputs(count=50)
+    # with open('Training_Data_50/inputs.pickle', 'wb') as f:
     #     pickle.dump(inputs, f)
     
-    outputs = read_outputs(count=10)
-    # outputs = convert_outputs_to_adjacency(outputs)
-    outputs = convert_dataset_to_graph(inputs, outputs)
-    with open('Training_Data_50/outputs_graph.pickle', 'wb') as f:
+    outputs = read_outputs(count=50)
+    outputs = convert_outputs_to_adjacency(outputs)
+    # outputs = convert_dataset_to_graph(inputs, outputs)
+    with open('Training_Data_50/outputs_adjacency.pickle', 'wb') as f:
         pickle.dump(outputs, f)
 
     # # Visualize the neighborhood of a node
