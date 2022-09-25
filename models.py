@@ -22,7 +22,7 @@ class LatticeCnn(torch.nn.Module):
         strut_neighborhood_radius = (strut_neighborhood - 1) / 2
 
         self.index_channel = torch.arange(h*w*d).reshape((1, 1, h, w, d)).to('cpu').float()
-        self.index_channel /= self.index_channel.max() * 255
+        self.index_channel /= self.index_channel.max()
 
         # Number of output channels in the first layer.
         c = 32

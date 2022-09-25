@@ -27,7 +27,7 @@ class CnnDataset(torch.utils.data.Dataset):
         time_start = time.time()
         
         with open(os.path.join(DATASET_FOLDER, 'inputs.pickle'), 'rb') as f:
-            self.inputs = pickle.load(f).float()
+            self.inputs = pickle.load(f).float() / 255
         with open(os.path.join(DATASET_FOLDER, 'outputs_adjacency.pickle'), 'rb') as f:
             self.outputs = pickle.load(f).float()
         
