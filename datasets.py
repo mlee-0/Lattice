@@ -27,7 +27,7 @@ class CnnDataset(torch.utils.data.Dataset):
         time_start = time.time()
         
         with open(os.path.join(DATASET_FOLDER, 'inputs.pickle'), 'rb') as f:
-            self.inputs = pickle.load(f).float() / 255
+            self.inputs = pickle.load(f).float()
         with open(os.path.join(DATASET_FOLDER, 'outputs_adjacency.pickle'), 'rb') as f:
             self.outputs = pickle.load(f).float()
         
@@ -36,6 +36,10 @@ class CnnDataset(torch.utils.data.Dataset):
             self.outputs = self.outputs[:count, ...]
 
         assert self.inputs.shape[0] == self.outputs.shape[0]
+
+        # Normalize input data to have zero mean and unit variance.
+        self.inputs -= self.inputs.mean()
+        self.inputs /= self.inputs.std()
 
         # # Remove density values outside the predefined volume of space.
         # with open(os.path.join(DATASET_FOLDER, 'outputs_nodes.pickle'), 'rb') as f:
@@ -59,6 +63,13 @@ class GnnDataset(torch_geometric.data.Dataset):
         if count is not None:
             self.dataset = self.dataset[:count]
         
+        # Normalize input data to have zero mean and unit variance.
+        inputs = torch.cat([graph.x.flatten() for graph in self.dataset])
+        mean, std = inputs.mean(), inputs.std()
+        for graph in self.dataset:
+            graph.x -= mean
+            graph.x /= std
+
     def __len__(self) -> int:
         return len(self.dataset)
 
