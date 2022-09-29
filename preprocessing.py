@@ -15,7 +15,7 @@ from datasets import DATASET_FOLDER
 
 
 # Size of input images (height, width, depth). Images are stacked along the depth dimension.
-INPUT_SHAPE = (51, 51, 51)  # (10, 10, 10)
+INPUT_SHAPE = (11, 11, 11)
 # Size of the volume of space around each node inside which struts are formed with other nodes.
 STRUT_NEIGHBORHOOD = 3
 STRUT_NEIGHBORHOOD_RADIUS = int((STRUT_NEIGHBORHOOD-1) / 2)
@@ -66,8 +66,8 @@ def read_struts() -> List[Tuple[int, int]]:
 
     return struts
 
-def read_inputs(count: int=None) -> np.ndarray:
-    """Return input images as a 5D array with shape (number of samples, 1 channel, height, width, depth)."""
+def read_inputs(count: int=None) -> torch.tensor:
+    """Return input images as a 5D tensor with shape (number of samples, 1 channel, height, width, depth)."""
     
     directory = os.path.join(DATASET_FOLDER, 'Input_Data')
     folders = next(os.walk(directory))[1]
@@ -174,6 +174,18 @@ def convert_outputs_to_adjacency(outputs: list) -> np.ndarray:
 
     return adjacency
 
+def apply_mask_inputs(inputs: torch.tensor, outputs: list):
+    """Remove density values outside the predefined volume of space."""
+
+    struts = read_struts()
+    node_numbers = make_node_numbers()
+
+    for i, output in enumerate(outputs):
+        mask = mask_of_active_nodes([strut for strut, d in output], struts, node_numbers)
+        inputs[i, 0, ~mask] = 0
+
+    return inputs
+
 def cube_rotations(count: int=None) -> Tuple[List[Tuple[int, int, int]], Tuple[Tuple[int, int]]]:
     """Return a list of the unique rotations for a 3D cube, along with the corresponding rotation axes.
 
@@ -271,14 +283,14 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
     for i in range(n):
         print(f"Processing output {i+1} of {n}...", end='\r')
 
-        mask = mask_of_active_nodes([_[0] for _ in outputs[i]], struts, node_numbers)
+        mask = mask_of_active_nodes([strut for strut, d in outputs[i]], struts, node_numbers)
         indices = np.argwhere(mask)
 
         number_nodes = indices.shape[0]
         number_total_nodes = node_numbers.size
 
         # Node feature matrix with shape (number of nodes, number of features per node). Includes all possible nodes, not just the nodes with nonzero values, to avoid having to renumber nodes.
-        node_features = torch.zeros([number_total_nodes, 1])
+        node_features = torch.zeros([number_total_nodes, 4])
         # List of edges as 2-tuples (node 1, node 2). Struts are formed within a 3x3x3 neighborhood.
         edge_index = set()
         
@@ -298,8 +310,8 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
                 max(0, y-r):min(INPUT_SHAPE[1], y+r+1),
                 max(0, z-r):min(INPUT_SHAPE[2], z+r+1),
             ]
-            for x_, y_, z_ in np.argwhere(neighborhood):
-                node_2 = neighborhood[x_, y_, z_]
+            for x2, y2, z2 in np.argwhere(neighborhood):
+                node_2 = neighborhood[x2, y2, z2]
                 if node != node_2:
                     edge_index.add(tuple(sorted((node, node_2))))
         
@@ -317,6 +329,8 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
 
         # Graph connectivity matrix transposed into shape (2, number of edges), where each column contains the two nodes that form an edge.
         edge_index = torch.tensor(edge_index, dtype=torch.int64).T
+        # Convert from node numbers to node indices.
+        edge_index -= 1
 
         graph = torch_geometric.data.Data(
             x=node_features,
@@ -336,17 +350,28 @@ def mask_of_active_nodes(strut_numbers: list, struts: list, node_numbers: np.nda
     )
     return mask
 
+def preprocess_cnn():
+    outputs = read_outputs()
+
+    inputs = read_inputs()
+    inputs = apply_mask_inputs(inputs, outputs)
+    
+    outputs = convert_outputs_to_adjacency(outputs)
+
+    with open('Training_Data_10/inputs.pickle', 'wb') as f:
+        pickle.dump(inputs, f)
+    with open('Training_Data_10/outputs.pickle', 'wb') as f:
+        pickle.dump(outputs, f)
+
+def preprocess_gnn():
+    inputs = read_inputs()
+    outputs = read_outputs()
+    graphs = convert_dataset_to_graph(inputs, outputs)
+    with open('Training_Data_10/graphs.pickle', 'wb') as f:
+        pickle.dump(graphs, f)
 
 if __name__ == "__main__":
-    # inputs = read_inputs(count=50)
-    # with open('Training_Data_50/inputs.pickle', 'wb') as f:
-    #     pickle.dump(inputs, f)
-    
-    outputs = read_outputs(count=50)
-    outputs = convert_outputs_to_adjacency(outputs)
-    # outputs = convert_dataset_to_graph(inputs, outputs)
-    with open('Training_Data_50/outputs_adjacency.pickle', 'wb') as f:
-        pickle.dump(outputs, f)
+    preprocess_gnn()
 
     # # Visualize the neighborhood of a node
     # struts = read_struts()

@@ -12,7 +12,7 @@ import torch_geometric
 try:
     from google.colab import drive  # type: ignore
 except ImportError:
-    DATASET_FOLDER = 'Training_Data_50'
+    DATASET_FOLDER = 'Training_Data_10'
 else:
     drive.mount('/content/drive')
     DATASET_FOLDER = 'drive/My Drive/Lattice'
@@ -28,7 +28,7 @@ class CnnDataset(torch.utils.data.Dataset):
         
         with open(os.path.join(DATASET_FOLDER, 'inputs.pickle'), 'rb') as f:
             self.inputs = pickle.load(f).float()
-        with open(os.path.join(DATASET_FOLDER, 'outputs_adjacency.pickle'), 'rb') as f:
+        with open(os.path.join(DATASET_FOLDER, 'outputs.pickle'), 'rb') as f:
             self.outputs = pickle.load(f).float()
         
         if count is not None:
@@ -41,11 +41,6 @@ class CnnDataset(torch.utils.data.Dataset):
         self.inputs -= self.inputs.mean()
         self.inputs /= self.inputs.std()
 
-        # # Remove density values outside the predefined volume of space.
-        # with open(os.path.join(DATASET_FOLDER, 'outputs_nodes.pickle'), 'rb') as f:
-        #     nodes = pickle.load(f)
-        # self.inputs[nodes == 0] = 0
-        
         time_end = time.time()
         print(f"Loaded dataset in {round(time_end - time_start)} seconds.")
 
@@ -57,7 +52,7 @@ class CnnDataset(torch.utils.data.Dataset):
 
 class GnnDataset(torch_geometric.data.Dataset):
     def __init__(self, count: int=None) -> None:
-        with open(os.path.join(DATASET_FOLDER, 'outputs_graph.pickle'), 'rb') as f:
+        with open(os.path.join(DATASET_FOLDER, 'graphs.pickle'), 'rb') as f:
             self.dataset = pickle.load(f)
         
         if count is not None:

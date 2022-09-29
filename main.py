@@ -133,7 +133,7 @@ def train_regression(
             # Adjust model parameters.
             optimizer.step()
 
-            if batch % 1 == 0:
+            if batch % 10 == 0:
                 print(f"Batch {batch}/{len(train_dataloader)}: {loss/batch:,.2e}...", end="\r")
                 if queue:
                     info_gui["progress_batch"] = (batch, len(train_dataloader)+len(validate_dataloader))
@@ -183,7 +183,7 @@ def train_regression(
                 outputs.append(output_data)
                 labels.append(label_data)
 
-                if batch % 1 == 0:
+                if batch % 10 == 0:
                     print(f"Batch {batch}/{len(validate_dataloader)}...", end="\r")
                     if queue:
                         info_gui["progress_batch"] = (len(train_dataloader)+batch, len(train_dataloader)+len(validate_dataloader))
@@ -466,15 +466,15 @@ if __name__ == "__main__":
         "train_existing": not True,
         "save_model_every": 5,
 
-        "epoch_count": 1,
-        "learning_rate": 1e-2,
+        "epoch_count": 10,
+        "learning_rate": 1e-3,
         "decay_learning_rate": not True,
-        "batch_sizes": (1, 64, 64),
+        "batch_sizes": (16, 64, 64),
         "training_split": (0.8, 0.1, 0.1),
         
-        "dataset": GnnDataset(4),
+        "dataset": GnnDataset(),
         "Model": LatticeGnn,
-        "Optimizer": torch.optim.SGD,
+        "Optimizer": torch.optim.Adam,
         "Loss": nn.MSELoss,
         
         "train": True,

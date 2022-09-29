@@ -2,5 +2,5 @@
 *.pyc
 *.pth
 
-Training_Data_50
+Training_Data_10
 *.pickle

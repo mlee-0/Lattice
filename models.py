@@ -16,7 +16,7 @@ class LatticeCnn(torch.nn.Module):
     def __init__(self, device: str='cpu') -> None:
         super().__init__()
 
-        h = w = d = 10
+        h = w = d = 11
         input_channels = 2
         strut_neighborhood = 3
         strut_neighborhood_radius = (strut_neighborhood - 1) / 2
@@ -61,13 +61,6 @@ class LatticeCnn(torch.nn.Module):
 
         self.global_pooling = torch.nn.AdaptiveAvgPool3d(output_size=(1, 1, 1))
 
-
-        # # Size of output of all convolution layers.
-        # shape_convolution = self.convolution_final(self.convolution_2(self.convolution_1(torch.empty((1, input_channels, h, w, d))))).size()
-        # size_convolution = np.prod(shape_convolution[1:])
-        # print(f'linear: {(size_convolution, size_output)}')
-        # self.linear = torch.nn.Linear(in_features=size_convolution, out_features=size_output)
-
     def forward(self, x):
         batch_size = x.size(0)
         x = torch.cat([x, torch.cat([self.index_channel] * batch_size, dim=0)], dim=1)
@@ -90,7 +83,7 @@ class LatticeResNet(torch.nn.Module):
         super().__init__()
         self.device = device
 
-        h = w = d = 10
+        h = w = d = 11
         input_channels = 2
         strut_neighborhood = 3
         strut_neighborhood_radius = (strut_neighborhood - 1) / 2
@@ -111,12 +104,20 @@ class LatticeResNet(torch.nn.Module):
         # Function that returns a residual block.
         residual = lambda in_channels, out_channels: torch.nn.Sequential(
             torch.nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding='same'),
-            torch.nn.ReLU(inplace=True),
+            torch.nn.ReLU(inplace=False),
             torch.nn.Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding='same'),
         )
 
-        self.convolution_1 = torch.nn.Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=2, padding=1)
-        self.convolution_2 = torch.nn.Conv3d(in_channels=c*1, out_channels=c*2, kernel_size=3, stride=2, padding=1)
+        self.convolution_1 = torch.nn.Sequential(
+            torch.nn.Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=2, padding=1),
+            torch.nn.BatchNorm3d(c*1),
+            torch.nn.ReLU(inplace=True),
+        )
+        self.convolution_2 = torch.nn.Sequential(
+            torch.nn.Conv3d(in_channels=c*1, out_channels=c*2, kernel_size=3, stride=2, padding=1),
+            torch.nn.BatchNorm3d(c*1),
+            torch.nn.ReLU(inplace=True),
+        )
 
         self.residual_1 = residual(c*2, c*2)
         self.convolution_bottleneck_1 = torch.nn.Conv3d(in_channels=c*2, out_channels=c*4, kernel_size=1)
@@ -134,11 +135,11 @@ class LatticeResNet(torch.nn.Module):
         x = self.convolution_1(x)
         x = self.convolution_2(x)
 
-        x += self.residual_1(x)
+        x = torch.relu(x + self.residual_1(x))
         x = self.convolution_bottleneck_1(x)
-        x += self.residual_2(x)
+        x = torch.relu(x + self.residual_2(x))
         x = self.convolution_bottleneck_2(x)
-        x += self.residual_3(x)
+        x = torch.relu(x + self.residual_3(x))
         x = self.convolution_bottleneck_3(x)
 
         x = self.global_pooling(x)
@@ -146,27 +147,24 @@ class LatticeResNet(torch.nn.Module):
 
         return x
 
-model = LatticeResNet()
-print(get_parameter_count(model))
-
 class LatticeGnn(torch.nn.Module):
     """A GNN whose input is a fully-connected graph of node locations and whose output is a graph of strut diameters."""
 
     def __init__(self, device: str='cpu') -> None:
         super().__init__()
 
-        h = w = d = 51
-        input_channels = 1
+        h = w = d = 11
+        input_channels = 4
 
         # Model size, defined as the number of output channels in the first layer. Numbers of channels in subsequent layers are multiples of this number, so this number controls the overall model size.
-        c = 32
+        c = 1
 
         self.convolution = torch_geometric.nn.Sequential('x, edge_index', [
             (torch_geometric.nn.GCNConv(in_channels=input_channels, out_channels=c*1), 'x, edge_index -> x'),
             torch.nn.ReLU(),
             (torch_geometric.nn.GCNConv(in_channels=c*1, out_channels=c*2), 'x, edge_index -> x'),
-            # torch.nn.ReLU(),
-            # (torch_geometric.nn.GCNConv(in_channels=c*2, out_channels=c*4), 'x, edge_index -> x'),
+            torch.nn.ReLU(),
+            (torch_geometric.nn.GCNConv(in_channels=c*2, out_channels=c*4), 'x, edge_index -> x'),
         ])
     
     def forward(self, x, edge_index):
@@ -175,7 +173,7 @@ class LatticeGnn(torch.nn.Module):
 
         # Predict edge values with shape (number of edges across batch,).
         x = torch.sum(
-            x[edge_index[0, :], :] + x[edge_index[1, :], :],
+            x[edge_index[0, :], :] * x[edge_index[1, :], :],
             dim=-1,
         )
         # Average each pair of edges that represent the same strut (for example, (1, 2) and (2, 1)) with shape (half the original number of edges, 1). The second dimension is included for compatibility with the labels used during training.
