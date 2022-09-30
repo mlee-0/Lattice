@@ -204,33 +204,57 @@ def visualize_lattice_from_graph(graph) -> None:
     iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
     iren.SetRenderWindow(window)
 
-    data = vtk.vtkAppendPolyData()
+    # data = vtk.vtkAppendPolyData()
+    # radius = vtk.vtkFloatArray()
+    # radius.SetNumberOfComponents(1)
+    # data.GetOutput().GetCellData().SetScalars(radius)
 
     # Skip duplicate edges.
+    coordinates = read_coordinates()
     for i in range(graph.edge_index.size(1) // 2):
         node_1, node_2 = graph.edge_index[:, i]
-        x1, y1, z1 = graph.x[node_1, 1:4]
-        x2, y2, z2 = graph.x[node_2, 1:4]
-        # if x1 == 0 and y1 == 0 and z1 == 0:
-        #     print(node_1, x1, y1, z1)
-        # if x2 == 0 and y2 == 0 and z2 == 0:
-        #     print(node_2, x2, y2, z2)
+        x1, y1, z1 = coordinates[node_1]
+        x2, y2, z2 = coordinates[node_2]
 
         line = vtk.vtkLineSource()
         line.SetPoint1(x1, y1, z1)
         line.SetPoint2(x2, y2, z2)
         line.SetResolution(0)
         line.Update()
-        data.AddInputData(line.GetOutput())
-    data.Update()
-    
-    mapper = vtk.vtkPolyDataMapper()
-    mapper.SetInputData(data.GetOutput())
-    actor = vtk.vtkActor()
-    actor.SetMapper(mapper)
-    actor.GetProperty().SetLighting(False)
+        # data.AddInputData(line.GetOutput())
 
-    ren.AddActor(actor)
+        # direction = [x2 - x1, y2 - y1, z2 - z1]
+        # cylinder = vtk.vtkCylinderSource()
+        # cylinder.SetHeight(np.linalg.norm(direction))
+        # cylinder.SetRadius(graph.y[i]/2)
+        # cylinder.SetAxis(direction)
+        # cylinder.Update()
+        # data.AddInputData(cylinder.GetOutput())
+
+        # VTK_LINE = 3
+        # cell = data.GetOutput().InsertNextCell(VTK_LINE, 1)
+        # # radius.SetValue(VTK_LINE, graph.y[i]/2)
+        # radius.InsertTuple1(cell, graph.y[i]/2)
+        # data.Update()
+
+    # for node in set(graph.edge_index.flatten()):
+    #     x, y, z = graph.x[node, 1:4]
+
+    # data.Update()
+
+        tube = vtk.vtkTubeFilter()
+        tube.SetInputData(line.GetOutput())
+        tube.SetRadius(graph.y[i]/2)
+        tube.SetNumberOfSides(3)
+        
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputConnection(tube.GetOutputPort())
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+        # actor.GetProperty().SetLighting(False)
+
+        ren.AddActor(actor)
+    
     ren.GetActiveCamera().SetParallelProjection(True)
     ren.ResetCamera()
     iren.Initialize()
@@ -239,14 +263,14 @@ def visualize_lattice_from_graph(graph) -> None:
 
 
 if __name__ == "__main__":
-    visualize_lattice_from_output(read_outputs(1)[0])
+    # visualize_lattice_from_output(read_outputs(1)[0])
     # with open('Training_Data_10/outputs.pickle', 'rb') as f:
     #     outputs = pickle.load(f)
     # visualize_lattice_from_adjacency(np.array(outputs[0, :, :]))
 
-    # with open("Training_Data_10/graphs.pickle", 'rb') as f:
-    #     graphs = pickle.load(f)
-    # visualize_lattice_from_graph(graphs[0])
+    with open("Training_Data_10/graphs.pickle", 'rb') as f:
+        graphs = pickle.load(f)
+    visualize_lattice_from_graph(graphs[0])
     
     # with open("Training_Data_10/inputs.pickle", 'rb') as f:
     #     array = pickle.load(f)
