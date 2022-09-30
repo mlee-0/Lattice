@@ -66,6 +66,7 @@ def visualize_input(array: np.ndarray, opacity: float=0.5) -> None:
     actor.GetProperty().SetLighting(False)
 
     ren.AddActor(actor)
+    ren.GetActiveCamera().SetParallelProjection(True)
     iren.Initialize()
     window.Render()
     iren.Start()
@@ -98,6 +99,46 @@ def visualize_nodes(array: np.ndarray, opacity: float=1.0) -> None:
     actor.GetProperty().SetOpacity(opacity)
 
     ren.AddActor(actor)
+    ren.GetActiveCamera().SetParallelProjection(True)
+    iren.Initialize()
+    window.Render()
+    iren.Start()
+
+def visualize_lattice_from_output(output: list) -> None:
+    """Start a visualization of a lattice defined as a list of tuples (strut number, diameter)."""
+
+    ren = vtk.vtkRenderer()
+    window = vtk.vtkRenderWindow()
+    window.AddRenderer(ren)
+    iren = vtk.vtkRenderWindowInteractor()
+    iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
+    iren.SetRenderWindow(window)
+
+    coordinates = read_coordinates()
+    struts = read_struts()
+
+    data = vtk.vtkAppendPolyData()
+
+    for strut, diameter in output:
+        node_1, node_2 = struts[strut - 1]
+        
+        line = vtk.vtkLineSource()
+        line.SetPoint1(coordinates[node_1 - 1])
+        line.SetPoint2(coordinates[node_2 - 1])
+        line.SetResolution(0)
+        line.Update()
+        data.AddInputData(line.GetOutput())
+    data.Update()
+
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputData(data.GetOutput())
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+    actor.GetProperty().SetLighting(False)
+
+    ren.AddActor(actor)
+    ren.GetActiveCamera().SetParallelProjection(True)
+    ren.ResetCamera()
     iren.Initialize()
     window.Render()
     iren.Start()
@@ -147,6 +188,7 @@ def visualize_lattice_from_adjacency(lattice: np.ndarray) -> None:
     actor.GetProperty().SetLighting(False)
 
     ren.AddActor(actor)
+    ren.GetActiveCamera().SetParallelProjection(True)
     ren.ResetCamera()
     iren.Initialize()
     window.Render()
@@ -189,6 +231,7 @@ def visualize_lattice_from_graph(graph) -> None:
     actor.GetProperty().SetLighting(False)
 
     ren.AddActor(actor)
+    ren.GetActiveCamera().SetParallelProjection(True)
     ren.ResetCamera()
     iren.Initialize()
     window.Render()
@@ -196,13 +239,14 @@ def visualize_lattice_from_graph(graph) -> None:
 
 
 if __name__ == "__main__":
-    with open('Training_Data_10/outputs.pickle', 'rb') as f:
-        outputs = pickle.load(f)
-    visualize_lattice_from_adjacency(np.array(outputs[0, :, :]))
+    visualize_lattice_from_output(read_outputs(1)[0])
+    # with open('Training_Data_10/outputs.pickle', 'rb') as f:
+    #     outputs = pickle.load(f)
+    # visualize_lattice_from_adjacency(np.array(outputs[0, :, :]))
 
-    with open("Training_Data_10/graphs.pickle", 'rb') as f:
-        graphs = pickle.load(f)
-    visualize_lattice_from_graph(graphs[0])
+    # with open("Training_Data_10/graphs.pickle", 'rb') as f:
+    #     graphs = pickle.load(f)
+    # visualize_lattice_from_graph(graphs[0])
     
     # with open("Training_Data_10/inputs.pickle", 'rb') as f:
     #     array = pickle.load(f)
