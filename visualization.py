@@ -82,8 +82,7 @@ def visualize_nodes(array: np.ndarray, opacity: float=1.0) -> None:
 
     data = vtk.vtkAppendPolyData()
     array = np.array(array)
-    indices = np.nonzero(array)
-    for x, y, z in zip(*indices):
+    for x, y, z in np.argwhere(array):
         cube = vtk.vtkCubeSource()
         cube.SetBounds(x, x+1, y, y+1, z, z+1)
         cube.Update()

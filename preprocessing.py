@@ -295,13 +295,13 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
         edge_index = set()
         
         for x, y, z in indices:
-            node = node_numbers[x, y, z]
+            node_1 = node_numbers[x, y, z]
             # Insert density [0, 1] of each node.
-            node_features[node-1, 0] = inputs[i, 0, x, y, z] / 255
+            node_features[node_1-1, 0] = inputs[i, 0, x, y, z] / 255
             # Insert coordinates of each node.
-            node_features[node-1, 1] = x / (INPUT_SHAPE[0] - 1)
-            node_features[node-1, 2] = y / (INPUT_SHAPE[1] - 1)
-            node_features[node-1, 3] = z / (INPUT_SHAPE[2] - 1)
+            node_features[node_1-1, 1] = x / (INPUT_SHAPE[0] - 1)
+            node_features[node_1-1, 2] = y / (INPUT_SHAPE[1] - 1)
+            node_features[node_1-1, 3] = z / (INPUT_SHAPE[2] - 1)
 
             # Insert edges for all valid struts.
             r = 1
@@ -310,16 +310,15 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
                 max(0, y-r):min(INPUT_SHAPE[1], y+r+1),
                 max(0, z-r):min(INPUT_SHAPE[2], z+r+1),
             ]
-            for x2, y2, z2 in np.argwhere(neighborhood):
-                node_2 = neighborhood[x2, y2, z2]
-                if node != node_2:
-                    edge_index.add(tuple(sorted((node, node_2))))
+            for node_2 in neighborhood.flatten():
+                if node_1 != node_2 and node_2 in node_numbers[mask]:
+                    edge_index.add(tuple(sorted((node_1, node_2))))
         
-        # Each strut must be represented by two separate edges in opposite directions to make the graph undirected (both (1, 2) and (2, 1)).
         edge_index = list(edge_index)
+        # Dictionary of (strut, indices) pairs to reduce runtime by avoiding list search.
+        edge_index_mapping = {strut: index for index, strut in enumerate(edge_index)}
+        # Each strut must be represented by two separate edges in opposite directions to make the graph undirected (both (1, 2) and (2, 1)).
         edge_index.extend([strut[::-1] for strut in edge_index])
-        # Dictionary of (strut, indices) pairs to reduce runtime by avoiding list search. Excludes the duplicate struts.
-        edge_index_mapping = {strut: index for index, strut in enumerate(edge_index[:len(edge_index)//2])}
 
         # Edge labels with shape (number of edges, 1).
         labels = torch.zeros([len(edge_index)//2, 1])
