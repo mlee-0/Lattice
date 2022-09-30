@@ -104,98 +104,64 @@ def visualize_nodes(array: np.ndarray, opacity: float=1.0) -> None:
     window.Render()
     iren.Start()
 
-def visualize_lattice_from_output(output: list) -> None:
-    """Start a visualization of a lattice defined as a list of tuples (strut number, diameter)."""
-
-    ren = vtk.vtkRenderer()
-    window = vtk.vtkRenderWindow()
-    window.AddRenderer(ren)
-    iren = vtk.vtkRenderWindowInteractor()
-    iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
-    iren.SetRenderWindow(window)
+def convert_output_to_lattice(output: list) -> Tuple[list, list, list]:
+    """Convert a list of tuples (strut number, diameter) into a tuple of coordinates and diameters."""
 
     coordinates = read_coordinates()
     struts = read_struts()
 
-    data = vtk.vtkAppendPolyData()
+    coordinates_1, coordinates_2, diameters = [], [], []
 
     for strut, diameter in output:
         node_1, node_2 = struts[strut - 1]
-        
-        line = vtk.vtkLineSource()
-        line.SetPoint1(coordinates[node_1 - 1])
-        line.SetPoint2(coordinates[node_2 - 1])
-        line.SetResolution(0)
-        line.Update()
-        data.AddInputData(line.GetOutput())
-    data.Update()
+        coordinates_1.append(tuple(coordinates[node_1 - 1]))
+        coordinates_2.append(tuple(coordinates[node_2 - 1]))
+        diameters.append(diameter)
+    
+    return coordinates_1, coordinates_2, diameters
 
-    mapper = vtk.vtkPolyDataMapper()
-    mapper.SetInputData(data.GetOutput())
-    actor = vtk.vtkActor()
-    actor.SetMapper(mapper)
-    actor.GetProperty().SetLighting(False)
-
-    ren.AddActor(actor)
-    ren.GetActiveCamera().SetParallelProjection(True)
-    ren.ResetCamera()
-    iren.Initialize()
-    window.Render()
-    iren.Start()
-
-def visualize_lattice_from_adjacency(lattice: np.ndarray) -> None:
-    """Start a visualization of a lattice defined as a 2D array of diameters with shape (number of nodes, number of struts per node)."""
-
-    ren = vtk.vtkRenderer()
-    window = vtk.vtkRenderWindow()
-    window.AddRenderer(ren)
-    iren = vtk.vtkRenderWindowInteractor()
-    iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
-    iren.SetRenderWindow(window)
+def convert_adjacency_to_lattice(array: np.ndarray) -> Tuple[list, list, list]:
+    """Convert a 2D adjacency matrix into a tuple of coordinates and diameters."""
 
     coordinates = read_coordinates()
     node_numbers = make_node_numbers()
 
-    data = vtk.vtkAppendPolyData()
+    coordinates_1, coordinates_2, diameters = [], [], []
 
-    for row in range(lattice.shape[0]):
-        for column in range(lattice.shape[1]):
-            d = lattice[row, column]
+    for row in range(array.shape[0]):
+        for column in range(array.shape[1]):
+            diameter = array[row, column]
 
-            if d > 0:
+            if diameter > 0:
                 x1, y1, z1 = np.unravel_index(row, shape=(11-1, 11-1, 11-1))
                 x2, y2, z2 = np.unravel_index(column + 1, shape=(2, 2, 2)) + np.array([x1, y1, z1])
                 node_1, node_2 = node_numbers[x1, y1, z1], node_numbers[x2, y2, z2]
-                # strut = node_1 * lattice.shape[1] + node_2
-                # node_1, node_2 = struts[strut]
 
-                line = vtk.vtkLineSource()
-                line.SetPoint1(coordinates[node_1 - 1])
-                line.SetPoint2(coordinates[node_2 - 1])
-                line.SetResolution(0)
-                line.Update()
-                data.AddInputData(line.GetOutput())
-    data.Update()
+                coordinates_1.append(tuple(coordinates[node_1 - 1]))
+                coordinates_2.append(tuple(coordinates[node_2 - 1]))
+                diameters.append(diameter)
     
-    # tube = vtk.vtkTubeFilter()
-    # tube.SetInputData(data.GetOutput())
-    # tube.SetVaryRadiusToVaryRadiusByScalar(True)
+    return coordinates_1, coordinates_2, diameters
 
-    mapper = vtk.vtkPolyDataMapper()
-    mapper.SetInputData(data.GetOutput())
-    actor = vtk.vtkActor()
-    actor.SetMapper(mapper)
-    actor.GetProperty().SetLighting(False)
+def convert_graph_to_lattice(graph) -> Tuple[list, list, list]:
+    """Convert a graph into a tuple of coordinates and diameters."""
 
-    ren.AddActor(actor)
-    ren.GetActiveCamera().SetParallelProjection(True)
-    ren.ResetCamera()
-    iren.Initialize()
-    window.Render()
-    iren.Start()
+    coordinates = read_coordinates()
 
-def visualize_lattice_from_graph(graph) -> None:
-    """Start a visualization of a lattice defined as a bidirected graph."""
+    coordinates_1, coordinates_2, diameters = [], [], []
+
+    for i in range(graph.edge_index.size(1) // 2):
+        node_1, node_2 = graph.edge_index[:, i]
+        coordinates_1.append(tuple(coordinates[node_1]))
+        coordinates_2.append(tuple(coordinates[node_2]))
+        diameters.append(graph.y[i])
+
+    return coordinates_1, coordinates_2, diameters
+
+def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float]) -> None:
+    """Start a visualization of a lattice defined as a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters. All lists must be the same length."""
+
+    assert len(locations_1) == len(locations_2) == len(diameters)
 
     ren = vtk.vtkRenderer()
     window = vtk.vtkRenderWindow()
@@ -204,47 +170,16 @@ def visualize_lattice_from_graph(graph) -> None:
     iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
     iren.SetRenderWindow(window)
 
-    # data = vtk.vtkAppendPolyData()
-    # radius = vtk.vtkFloatArray()
-    # radius.SetNumberOfComponents(1)
-    # data.GetOutput().GetCellData().SetScalars(radius)
-
-    # Skip duplicate edges.
-    coordinates = read_coordinates()
-    for i in range(graph.edge_index.size(1) // 2):
-        node_1, node_2 = graph.edge_index[:, i]
-        x1, y1, z1 = coordinates[node_1]
-        x2, y2, z2 = coordinates[node_2]
-
+    for (x1, y1, z1), (x2, y2, z2), diameter in zip(locations_1, locations_2, diameters):
         line = vtk.vtkLineSource()
         line.SetPoint1(x1, y1, z1)
         line.SetPoint2(x2, y2, z2)
         line.SetResolution(0)
         line.Update()
-        # data.AddInputData(line.GetOutput())
-
-        # direction = [x2 - x1, y2 - y1, z2 - z1]
-        # cylinder = vtk.vtkCylinderSource()
-        # cylinder.SetHeight(np.linalg.norm(direction))
-        # cylinder.SetRadius(graph.y[i]/2)
-        # cylinder.SetAxis(direction)
-        # cylinder.Update()
-        # data.AddInputData(cylinder.GetOutput())
-
-        # VTK_LINE = 3
-        # cell = data.GetOutput().InsertNextCell(VTK_LINE, 1)
-        # # radius.SetValue(VTK_LINE, graph.y[i]/2)
-        # radius.InsertTuple1(cell, graph.y[i]/2)
-        # data.Update()
-
-    # for node in set(graph.edge_index.flatten()):
-    #     x, y, z = graph.x[node, 1:4]
-
-    # data.Update()
 
         tube = vtk.vtkTubeFilter()
         tube.SetInputData(line.GetOutput())
-        tube.SetRadius(graph.y[i]/2)
+        tube.SetRadius(diameter)
         tube.SetNumberOfSides(3)
         
         mapper = vtk.vtkPolyDataMapper()
@@ -263,14 +198,14 @@ def visualize_lattice_from_graph(graph) -> None:
 
 
 if __name__ == "__main__":
-    # visualize_lattice_from_output(read_outputs(1)[0])
+    # visualize_lattice(*convert_output_to_lattice(read_outputs(1)[0]))
     # with open('Training_Data_10/outputs.pickle', 'rb') as f:
     #     outputs = pickle.load(f)
-    # visualize_lattice_from_adjacency(np.array(outputs[0, :, :]))
+    # visualize_lattice(*convert_adjacency_to_lattice(np.array(outputs[0, :, :])))
 
     with open("Training_Data_10/graphs.pickle", 'rb') as f:
         graphs = pickle.load(f)
-    visualize_lattice_from_graph(graphs[0])
+    visualize_lattice(*convert_graph_to_lattice(graphs[0]))
     
     # with open("Training_Data_10/inputs.pickle", 'rb') as f:
     #     array = pickle.load(f)
