@@ -76,7 +76,7 @@ def read_inputs(count: int=None) -> torch.tensor:
     if count is not None:
         folders = folders[:count]
 
-    data_type = np.uint8
+    data_type = np.int16
     inputs = np.empty((len(folders), 1, *INPUT_SHAPE), dtype=data_type)
 
     for i, folder in enumerate(folders):
@@ -175,14 +175,14 @@ def convert_outputs_to_adjacency(outputs: list) -> np.ndarray:
     return adjacency
 
 def apply_mask_inputs(inputs: torch.tensor, outputs: list):
-    """Remove density values outside the predefined volume of space."""
+    """Replace density values outside the predefined volume of space with some constant value."""
 
     struts = read_struts()
     node_numbers = make_node_numbers()
 
     for i, output in enumerate(outputs):
         mask = mask_of_active_nodes([strut for strut, d in output], struts, node_numbers)
-        inputs[i, 0, ~mask] = 0
+        inputs[i, 0, ~mask] = -1
 
     return inputs
 
