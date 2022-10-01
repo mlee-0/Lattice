@@ -19,8 +19,6 @@ INPUT_SHAPE = (11, 11, 11)
 # Size of the volume of space around each node inside which struts are formed with other nodes.
 STRUT_NEIGHBORHOOD = 3
 STRUT_NEIGHBORHOOD_RADIUS = int((STRUT_NEIGHBORHOOD-1) / 2)
-# Maximum number of struts connected to each node.
-STRUTS_PER_NODE = 7
 
 
 def read_coordinates() -> List[List[int]]:
@@ -135,42 +133,35 @@ def convert_outputs_to_adjacency(outputs: list) -> np.ndarray:
     # Number of data.
     n = len(outputs)
 
-    # Height of the adjacency matrix, equal to the number of nodes. Excludes nodes at some edges of the volume to avoid redundancy.
-    h = int(np.prod([_-STRUT_NEIGHBORHOOD_RADIUS for _ in INPUT_SHAPE]))
+    # Height of the adjacency matrix, equal to the number of nodes.
+    h = int(np.prod(INPUT_SHAPE))
     # Width of the adjacency matrix, equal to the number of struts per node. Excludes some struts to avoid redundancy.
-    w = STRUTS_PER_NODE
+    w = STRUT_NEIGHBORHOOD ** 3 - 1
 
     node_numbers = make_node_numbers()
-    # Array of node numbers excluding nodes near some edges.
-    node_numbers_valid = node_numbers[:-STRUT_NEIGHBORHOOD_RADIUS, :-STRUT_NEIGHBORHOOD_RADIUS, :-STRUT_NEIGHBORHOOD_RADIUS]
-
     struts = read_struts()
-    strut_indices = {strut: index for index, strut in enumerate(struts)}
 
     adjacency = torch.zeros((n, h, w), dtype=torch.float32)
-    strut_counter = 0
 
     for i, output in enumerate(outputs):
         print(f"Processing output {i+1} of {n}...", end='\r')
 
         for strut, d in output:
-            strut_counter += 1
             node_1, node_2 = struts[strut - 1]
 
             x1, y1, z1 = np.argwhere(node_numbers == node_1)[0, :]
             x2, y2, z2 = np.argwhere(node_numbers == node_2)[0, :]
-            # Skip if this is a redundant strut.
-            if node_1 not in node_numbers_valid or (x2 < x1) or (y2 < y1) or (z2 < z1):
-                continue
 
             # Indices increase along Z first, Y second, X last.
-            row = np.ravel_multi_index((x1, y1, z1), node_numbers_valid.shape)
-            # Subtract 1 because a node cannot connect to itself.
-            column = np.ravel_multi_index((x2-x1, y2-y1, z2-z1), (2, 2, 2)) - 1
+            row = np.ravel_multi_index((x1, y1, z1), node_numbers.shape)
+            column = np.ravel_multi_index((x2-x1+1, y2-y1+1, z2-z1+1), (STRUT_NEIGHBORHOOD,)*3)
+            if column >= 13:
+                # Subtract indices greater than that of the node at the center of the 3x3x3 neighborhood.
+                column -= 1
 
             adjacency[i, row, column] = d
 
-    print(f"\nDensity of adjacency matrix: {strut_counter / (n * h * w)}")
+    print(f"\nDensity of adjacency matrix: {(adjacency > 0).sum() / adjacency.numel()}")
 
     return adjacency
 
@@ -351,10 +342,8 @@ def mask_of_active_nodes(strut_numbers: list, struts: list, node_numbers: np.nda
 
 def preprocess_cnn():
     outputs = read_outputs()
-
     inputs = read_inputs()
     inputs = apply_mask_inputs(inputs, outputs)
-    
     outputs = convert_outputs_to_adjacency(outputs)
 
     with open('Training_Data_10/inputs.pickle', 'wb') as f:
@@ -370,7 +359,7 @@ def preprocess_gnn():
         pickle.dump(graphs, f)
 
 if __name__ == "__main__":
-    preprocess_gnn()
+    preprocess_cnn()
 
     # # Visualize the neighborhood of a node
     # struts = read_struts()

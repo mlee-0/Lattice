@@ -133,8 +133,10 @@ def convert_adjacency_to_lattice(array: np.ndarray) -> Tuple[list, list, list]:
             diameter = array[row, column]
 
             if diameter > 0:
-                x1, y1, z1 = np.unravel_index(row, shape=(11-1, 11-1, 11-1))
-                x2, y2, z2 = np.unravel_index(column + 1, shape=(2, 2, 2)) + np.array([x1, y1, z1])
+                x1, y1, z1 = np.unravel_index(row, shape=(11,)*3)
+                if column >= 13:
+                    column += 1
+                x2, y2, z2 = np.unravel_index(column, shape=(3,)*3) + np.array([x1-1, y1-1, z1-1])
                 node_1, node_2 = node_numbers[x1, y1, z1], node_numbers[x2, y2, z2]
 
                 coordinates_1.append(tuple(coordinates[node_1 - 1]))
@@ -179,7 +181,7 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
 
         tube = vtk.vtkTubeFilter()
         tube.SetInputData(line.GetOutput())
-        tube.SetRadius(diameter)
+        tube.SetRadius(diameter / 2)
         tube.SetNumberOfSides(3)
         
         mapper = vtk.vtkPolyDataMapper()
@@ -198,14 +200,18 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
 
 
 if __name__ == "__main__":
-    # visualize_lattice(*convert_output_to_lattice(read_outputs(1)[0]))
-    # with open('Training_Data_10/outputs.pickle', 'rb') as f:
-    #     outputs = pickle.load(f)
-    # visualize_lattice(*convert_adjacency_to_lattice(np.array(outputs[0, :, :])))
+    # lattice = convert_output_to_lattice(read_outputs(1)[0])
+    # visualize_lattice(*lattice)
 
-    with open("Training_Data_10/graphs.pickle", 'rb') as f:
-        graphs = pickle.load(f)
-    visualize_lattice(*convert_graph_to_lattice(graphs[0]))
+    with open('Training_Data_10/outputs.pickle', 'rb') as f:
+        outputs = pickle.load(f)
+    lattice = convert_adjacency_to_lattice(np.array(outputs[0, :, :]))
+    visualize_lattice(*lattice)
+
+    # with open("Training_Data_10/graphs.pickle", 'rb') as f:
+    #     graphs = pickle.load(f)
+    # lattice = convert_graph_to_lattice(graphs[0])
+    # visualize_lattice(*lattice)
     
     # with open("Training_Data_10/inputs.pickle", 'rb') as f:
     #     array = pickle.load(f)
