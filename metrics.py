@@ -58,7 +58,7 @@ def plot_error_by_label(p, y):
     plt.grid()
     plt.xlabel('True')
     plt.ylabel('Error')
-    plt.title('Error By True Values')
+    plt.title('Errors By True Values')
     plt.show()
 
 def plot_adjacency(p, y):

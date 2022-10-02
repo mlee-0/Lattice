@@ -1,6 +1,7 @@
 """Run this file to read and cache dataset files for faster subsequent loading."""
 
 
+import copy
 import glob
 import os
 import pickle
@@ -86,14 +87,14 @@ def read_inputs(count: int=None) -> torch.tensor:
         # Concatenate each image.
         for d, file in enumerate(files):
             with Image.open(file) as f:
-                inputs[i, 0, ..., d] = np.asarray(f, dtype=data_type)
+                inputs[i, 0, ..., d] = np.asarray(f, dtype=data_type).transpose()
 
     inputs = torch.tensor(inputs)
 
     return inputs
 
 def read_outputs(count: int=None) -> List[List[Tuple[int, int]]]:
-    """Return nonzero-diameter output data as a list of lists of 2-tuples: (strut number, nonzero diameter). Duplicate struts are not included."""
+    """Return nonzero-diameter output data as a list of lists of 2-tuples: (strut number, nonzero diameter). Duplicate struts are not included, and all strut numbers correspond to node numbers in increasing order (node 1 < node 2)."""
     
     directory = os.path.join(DATASET_FOLDER, 'Output_Data')
 
@@ -141,16 +142,19 @@ def convert_outputs_to_adjacency(outputs: list) -> np.ndarray:
     node_numbers = make_node_numbers()
     struts = read_struts()
 
+    # Dictionary of node indices {node: (x, y, z)} to reduce runtime by avoiding search.
+    node_indices = {node_numbers[x, y, z]: (x, y, z) for x in range(node_numbers.shape[0]) for y in range(node_numbers.shape[1]) for z in range(node_numbers.shape[2])}
+
     adjacency = torch.zeros((n, h, w), dtype=torch.float32)
 
     for i, output in enumerate(outputs):
-        print(f"Processing output {i+1} of {n}...", end='\r')
+        print(f"Converting output {i+1} of {n}...", end='\r')
 
         for strut, d in output:
             node_1, node_2 = struts[strut - 1]
 
-            x1, y1, z1 = np.argwhere(node_numbers == node_1)[0, :]
-            x2, y2, z2 = np.argwhere(node_numbers == node_2)[0, :]
+            x1, y1, z1 = node_indices[node_1]
+            x2, y2, z2 = node_indices[node_2]
 
             # Indices increase along Z first, Y second, X last.
             row = np.ravel_multi_index((x1, y1, z1), node_numbers.shape)
@@ -222,7 +226,8 @@ def rotate_array(array: np.ndarray, rotation: tuple, axes: tuple) -> np.ndarray:
 
     return array
 
-def augment_inputs(inputs: np.ndarray, augmentations: int=None) -> np.ndarray:
+def augment_inputs(inputs: torch.tensor, augmentations: int=None) -> np.ndarray:
+    print(f"Augmenting inputs...")
     rotations, axes = cube_rotations(augmentations)
 
     axes = tuple((dim_1+2, dim_2+2) for dim_1, dim_2 in axes)
@@ -230,33 +235,41 @@ def augment_inputs(inputs: np.ndarray, augmentations: int=None) -> np.ndarray:
         [rotate_array(inputs, rotation, axes) for rotation in rotations],
         axis=0,
     )
+    inputs = torch.tensor(inputs)
 
     return inputs
 
 def augment_outputs(outputs: list, augmentations: int=None):
+    print(f"Augmenting outputs...")
     rotations, axes = cube_rotations(augmentations)
 
     node_numbers = make_node_numbers()
     struts = read_struts()
+    strut_indices = {strut: index for index, strut in enumerate(struts)}
 
-    rotated_outputs = [outputs]
+    rotated_outputs = copy.deepcopy(outputs)
     for rotation in rotations[1:]:
         rotated_node_numbers = rotate_array(node_numbers, rotation, axes)
+        # Dictionary of node indices {node: (x, y, z)} to reduce runtime by avoiding search.
+        node_indices = {rotated_node_numbers[x, y, z]: (x, y, z) for x in range(rotated_node_numbers.shape[0]) for y in range(rotated_node_numbers.shape[1]) for z in range(rotated_node_numbers.shape[2])}
 
-        rotated = []
-        for output in outputs:
-            for strut, diameter in output:
+        for i, output in enumerate(outputs):
+            print(f"Augmenting output {i} of {len(outputs)} for rotation {rotation}...", end='\r')
+            rotated_output = [None] * len(output)
+            for j, (strut, diameter) in enumerate(output):
                 node_1, node_2 = struts[strut - 1]
                 
-                x1, y1, z1 = np.argwhere(rotated_node_numbers == node_1)[0, :]
-                x2, y2, z2 = np.argwhere(rotated_node_numbers == node_1)[0, :]
+                x1, y1, z1 = node_indices[node_1]
+                x2, y2, z2 = node_indices[node_2]
                 rotated_node_1 = node_numbers[x1, y1, z1]
                 rotated_node_2 = node_numbers[x2, y2, z2]
+                # Order node numbers in increasing order.
+                rotated_node_1, rotated_node_2 = sorted((rotated_node_1, rotated_node_2))
 
-                rotated_strut = struts.index((rotated_node_1, rotated_node_2)) + 1
+                rotated_strut = strut_indices[(rotated_node_1, rotated_node_2)] + 1
 
-                rotated.append((rotated_strut, diameter))
-        rotated_outputs.extend(rotated)
+                rotated_output[j] = (rotated_strut, diameter)
+            rotated_outputs.append(rotated_output)
 
     return rotated_outputs
 
@@ -272,7 +285,7 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
     graphs = []
 
     for i in range(n):
-        print(f"Processing output {i+1} of {n}...", end='\r')
+        print(f"Converting output {i+1} of {n}...", end='\r')
 
         mask = mask_of_active_nodes([strut for strut, d in outputs[i]], struts, node_numbers)
         indices = np.argwhere(mask)
@@ -306,15 +319,15 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
                     edge_index.add(tuple(sorted((node_1, node_2))))
         
         edge_index = list(edge_index)
-        # Dictionary of (strut, indices) pairs to reduce runtime by avoiding list search.
-        edge_index_mapping = {strut: index for index, strut in enumerate(edge_index)}
+        # Dictionary of strut indices {(node 1, node 2): indices} to reduce runtime by avoiding list search.
+        edge_index_indices = {nodes: index for index, nodes in enumerate(edge_index)}
         # Each strut must be represented by two separate edges in opposite directions to make the graph undirected (both (1, 2) and (2, 1)).
-        edge_index.extend([strut[::-1] for strut in edge_index])
+        edge_index.extend([nodes[::-1] for nodes in edge_index])
 
         # Edge labels with shape (number of edges, 1).
         labels = torch.zeros([len(edge_index)//2, 1])
         for strut, diameter in outputs[i]:
-            edge = edge_index_mapping[struts[strut - 1]]
+            edge = edge_index_indices[struts[strut - 1]]
             labels[edge, 0] = diameter
 
         # Graph connectivity matrix transposed into shape (2, number of edges), where each column contains the two nodes that form an edge.
@@ -340,9 +353,11 @@ def mask_of_active_nodes(strut_numbers: list, struts: list, node_numbers: np.nda
     )
     return mask
 
-def preprocess_cnn():
-    outputs = read_outputs()
-    inputs = read_inputs()
+def preprocess_cnn(count: int=None):
+    inputs = read_inputs(count)
+    outputs = read_outputs(count)
+    inputs = augment_inputs(inputs)
+    outputs = augment_outputs(outputs)
     inputs = apply_mask_inputs(inputs, outputs)
     outputs = convert_outputs_to_adjacency(outputs)
 
@@ -351,9 +366,11 @@ def preprocess_cnn():
     with open('Training_Data_10/outputs.pickle', 'wb') as f:
         pickle.dump(outputs, f)
 
-def preprocess_gnn():
-    inputs = read_inputs()
-    outputs = read_outputs()
+def preprocess_gnn(count: int=None):
+    inputs = read_inputs(count)
+    outputs = read_outputs(count)
+    inputs = augment_inputs(inputs)
+    outputs = augment_outputs(outputs)
     graphs = convert_dataset_to_graph(inputs, outputs)
     with open('Training_Data_10/graphs.pickle', 'wb') as f:
         pickle.dump(graphs, f)
