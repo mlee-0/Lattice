@@ -67,6 +67,7 @@ def visualize_input(array: np.ndarray, opacity: float=0.5) -> None:
 
     ren.AddActor(actor)
     ren.GetActiveCamera().SetParallelProjection(True)
+    ren.ResetCamera()
     iren.Initialize()
     window.Render()
     iren.Start()
@@ -127,6 +128,7 @@ def convert_adjacency_to_lattice(array: np.ndarray) -> Tuple[list, list, list]:
     node_numbers = make_node_numbers()
 
     coordinates_1, coordinates_2, diameters = [], [], []
+    unique_struts = set()
 
     for row in range(array.shape[0]):
         for column in range(array.shape[1]):
@@ -137,7 +139,19 @@ def convert_adjacency_to_lattice(array: np.ndarray) -> Tuple[list, list, list]:
                 if column >= 13:
                     column += 1
                 x2, y2, z2 = np.unravel_index(column, shape=(3,)*3) + np.array([x1-1, y1-1, z1-1])
-                node_1, node_2 = node_numbers[x1, y1, z1], node_numbers[x2, y2, z2]
+
+                # Skip nodes near the edges that may result in out-of-bounds indices.
+                try:
+                    node_1, node_2 = node_numbers[x1, y1, z1], node_numbers[x2, y2, z2]
+                except IndexError:
+                    continue
+                
+                # Skip duplicate struts.
+                strut = tuple(sorted((node_1, node_2)))
+                if strut in unique_struts:
+                    continue
+                else:
+                    unique_struts.add(strut)
 
                 coordinates_1.append(tuple(coordinates[node_1 - 1]))
                 coordinates_2.append(tuple(coordinates[node_2 - 1]))
