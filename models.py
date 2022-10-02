@@ -34,8 +34,8 @@ class LatticeCnn(torch.nn.Module):
 
         # Output size, representing the maximum number of struts possible.
         self.shape_output = (
-            int((h-strut_neighborhood_radius) * (w-strut_neighborhood_radius) * (d-strut_neighborhood_radius)),
-            int((strut_neighborhood_radius+1) ** 3 - 1),
+            int(h * w * d),
+            int(strut_neighborhood ** 3 - 1),
         )
         size_output = int(np.prod(self.shape_output))
 
@@ -96,8 +96,8 @@ class LatticeResNet(torch.nn.Module):
 
         # Output size, representing the maximum number of struts possible.
         self.shape_output = (
-            int((h-strut_neighborhood_radius) * (w-strut_neighborhood_radius) * (d-strut_neighborhood_radius)),
-            int((strut_neighborhood_radius+1) ** 3 - 1),
+            int(h * w * d),
+            int(strut_neighborhood ** 3 - 1),
         )
         size_output = int(np.prod(self.shape_output))
 
@@ -115,7 +115,7 @@ class LatticeResNet(torch.nn.Module):
         )
         self.convolution_2 = torch.nn.Sequential(
             torch.nn.Conv3d(in_channels=c*1, out_channels=c*2, kernel_size=3, stride=2, padding=1),
-            torch.nn.BatchNorm3d(c*1),
+            torch.nn.BatchNorm3d(c*2),
             torch.nn.ReLU(inplace=True),
         )
 
@@ -184,61 +184,3 @@ class LatticeGnn(torch.nn.Module):
         x = torch.sigmoid(x)
 
         return x
-
-
-
-# """Test GNN architectures."""
-# import torch
-# import torch.nn.functional as F
-# # from torch.utils.data import Dataset, DataLoader
-# from torch_geometric.loader import DataLoader
-# from torch_geometric.datasets import TUDataset
-# from torch_geometric.nn import GCNConv
-
-
-# dataset = TUDataset(root='.', name='ENZYMES', use_node_attr=True)
-# dataloader = DataLoader(dataset[:3], batch_size=1, shuffle=True)  # Must use PyG's DataLoader for compatibility with graphs
-
-# print(f"Dataset of {len(dataset)} samples has {dataset.num_classes} classes, {dataset.num_node_features} node features, {dataset.num_node_attributes} node attributes, {dataset.num_edge_features} edge features, {dataset.num_edge_attributes} edge attributes.")
-
-
-# class GNN(torch.nn.Module):
-#     def __init__(self) -> None:
-#         super().__init__()
-
-#         # # Convolve input image and produce output w/ same shape as input, then convert to graph; idea is to capture neighboring voxels' info into each voxel
-#         # self.conv3d = torch.nn.Sequential(
-#         #     torch.nn.Conv3d(1, 4, kernel_size=3, stride=1, padding='same'),
-#         #     torch.nn.ReLU(inplace=True),
-#         #     torch.nn.Conv3d(4, 8, kernel_size=3, stride=1, padding='same'),
-#         # )
-
-#         self.conv_1 = GCNConv(dataset.num_node_features, 32)
-#         self.conv_2 = GCNConv(32, 8)
-    
-#     def forward(self, graph):
-#         # input_image = self.conv3d(input_image)
-
-#         x, edge_index = graph.x, graph.edge_index
-
-#         # Predict node embeddings.
-#         x = self.conv_1(x, edge_index)
-#         x = torch.relu(x)
-#         x = self.conv_2(x, edge_index)
-
-#         # Predict edge values.
-#         print(x.size())
-#         x = (x[edge_index[0, :], :] * x[edge_index[1, :], :]).sum(dim=1)
-#         print(x.size())
-
-#         # Constrain output values to [0, 1].
-#         x = torch.sigmoid(x)
-#         print(x)
-
-#         return x
-
-# model = GNN()
-# for batch in dataloader:
-#     model(batch)
-# # print(sum(len(p) for p in model.parameters()))
-# # print(model.conv_1._parameters)
