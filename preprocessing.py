@@ -66,7 +66,7 @@ def read_struts() -> List[Tuple[int, int]]:
     return struts
 
 def read_inputs(count: int=None) -> torch.tensor:
-    """Return input images as a 5D tensor with shape (number of samples, 1 channel, height, width, depth)."""
+    """Return input images as a 5D tensor with shape (number of data, 1 channel, height, width, depth)."""
     
     directory = os.path.join(DATASET_FOLDER, 'Input_Data')
     folders = next(os.walk(directory))[1]
@@ -129,46 +129,17 @@ def read_outputs(count: int=None) -> List[List[Tuple[int, int]]]:
 
     return outputs
 
-def convert_outputs_to_adjacency(outputs: list) -> np.ndarray:
-    """Convert the given output data to a 3D array with shape (number of samples, height of the adjacency matrix, width of the adjacency matrix)."""
+def get_unique_strut_numbers(struts: list) -> list:
+    """Return a list of strut numbers corresponding only to node numbers in increasing order (for example, (1, 2) but not (2, 1))."""
 
-    # Number of data.
-    n = len(outputs)
+    unique_struts = {tuple(sorted(strut)) for strut in struts}
 
-    # Height of the adjacency matrix, equal to the number of nodes.
-    h = int(np.prod(INPUT_SHAPE))
-    # Width of the adjacency matrix, equal to the number of struts per node. Excludes some struts to avoid redundancy.
-    w = STRUT_NEIGHBORHOOD ** 3 - 1
-
-    node_numbers = make_node_numbers()
-    struts = read_struts()
-
-    # Dictionary of node indices {node: (x, y, z)} to reduce runtime by avoiding search.
-    node_indices = {node_numbers[x, y, z]: (x, y, z) for x in range(node_numbers.shape[0]) for y in range(node_numbers.shape[1]) for z in range(node_numbers.shape[2])}
-
-    adjacency = torch.zeros((n, h, w), dtype=torch.float32)
-
-    for i, output in enumerate(outputs):
-        print(f"Converting output {i+1} of {n}...", end='\r')
-
-        for strut, d in output:
-            node_1, node_2 = struts[strut - 1]
-
-            x1, y1, z1 = node_indices[node_1]
-            x2, y2, z2 = node_indices[node_2]
-
-            # Indices increase along Z first, Y second, X last.
-            row = np.ravel_multi_index((x1, y1, z1), node_numbers.shape)
-            column = np.ravel_multi_index((x2-x1+1, y2-y1+1, z2-z1+1), (STRUT_NEIGHBORHOOD,)*3)
-            if column >= 13:
-                # Subtract indices greater than that of the node at the center of the 3x3x3 neighborhood.
-                column -= 1
-
-            adjacency[i, row, column] = d
-
-    print(f"\nDensity of adjacency matrix: {(adjacency > 0).sum() / adjacency.numel()}")
-
-    return adjacency
+    strut_numbers = []
+    for number, strut in enumerate(struts, 1):
+        if strut in unique_struts:
+            strut_numbers.append(number)
+    
+    return strut_numbers
 
 def apply_mask_inputs(inputs: torch.tensor, outputs: list):
     """Replace density values outside the predefined volume of space with some constant value."""
@@ -255,7 +226,9 @@ def augment_outputs(outputs: list, augmentations: int=None):
         node_indices = {rotated_node_numbers[x, y, z]: (x, y, z) for x in range(rotated_node_numbers.shape[0]) for y in range(rotated_node_numbers.shape[1]) for z in range(rotated_node_numbers.shape[2])}
 
         for i, output in enumerate(outputs):
-            print(f"Augmenting output {i} of {len(outputs)} for rotation {rotation}...", end='\r')
+            if i % 10 == 0:
+                print(f"Augmenting output {i} of {len(outputs)} for rotation {rotation}...", end='\r')
+
             rotated_output = [None] * len(output)
             for j, (strut, diameter) in enumerate(output):
                 node_1, node_2 = struts[strut - 1]
@@ -273,6 +246,72 @@ def augment_outputs(outputs: list, augmentations: int=None):
             rotated_outputs.append(rotated_output)
 
     return rotated_outputs
+
+def convert_outputs_to_adjacency(outputs: list) -> np.ndarray:
+    """Convert the given output data to a 3D array with shape (number of data, height of the adjacency matrix, width of the adjacency matrix)."""
+
+    # Number of data.
+    n = len(outputs)
+
+    # Height of the adjacency matrix, equal to the number of nodes.
+    h = int(np.prod(INPUT_SHAPE))
+    # Width of the adjacency matrix, equal to the number of struts per node. Excludes some struts to avoid redundancy.
+    w = STRUT_NEIGHBORHOOD ** 3 - 1
+
+    node_numbers = make_node_numbers()
+    struts = read_struts()
+
+    # Dictionary of node indices {node: (x, y, z)} to reduce runtime by avoiding search.
+    node_indices = {node_numbers[x, y, z]: (x, y, z) for x in range(node_numbers.shape[0]) for y in range(node_numbers.shape[1]) for z in range(node_numbers.shape[2])}
+
+    adjacency = torch.zeros((n, h, w), dtype=torch.float32)
+
+    for i, output in enumerate(outputs):
+        if i % 100 == 0:
+            print(f"Converting output {i+1} of {n}...", end='\r')
+
+        for strut, d in output:
+            node_1, node_2 = struts[strut - 1]
+
+            x1, y1, z1 = node_indices[node_1]
+            x2, y2, z2 = node_indices[node_2]
+
+            # Indices increase along Z first, Y second, X last.
+            row = np.ravel_multi_index((x1, y1, z1), node_numbers.shape)
+            column = np.ravel_multi_index((x2-x1+1, y2-y1+1, z2-z1+1), (STRUT_NEIGHBORHOOD,)*3)
+            if column >= 13:
+                # Subtract indices greater than that of the node at the center of the 3x3x3 neighborhood.
+                column -= 1
+
+            adjacency[i, row, column] = d
+
+    print(f"\nDensity of adjacency matrix: {(adjacency > 0).sum() / adjacency.numel()}")
+
+    return adjacency
+
+def convert_outputs_to_vector(outputs: list) -> np.ndarray:
+    """Convert the given output data to a 2D array of diameters with shape (number of data, number of struts). Duplicate struts are excluded."""
+
+    # Number of data.
+    n = len(outputs)
+
+    strut_numbers = get_unique_strut_numbers(read_struts())
+    # Dictionary of indices {strut number: index} to reduce runtime by avoiding list search.
+    strut_numbers_indices = {number: index for index, number in enumerate(strut_numbers)}
+
+    vector = torch.zeros((n, len(strut_numbers)), dtype=torch.float32)
+
+    for i, output in enumerate(outputs):
+        if i % 100 == 0:
+            print(f"Converting output {i+1} of {n}...", end='\r')
+
+        strut_indices = torch.tensor([strut_numbers_indices[_[0]] for _ in output])
+        diameters = torch.tensor([_[1] for _ in output])
+        vector[i, strut_indices] = diameters
+
+    print(f"\nDensity of vector: {(vector > 0).sum() / vector.numel()}")
+
+    return vector
 
 def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_geometric.data.Data]:
     """Convert a 5D array of input data and a list of output data to a list of graphs."""
@@ -320,7 +359,7 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
                     edge_index.add(tuple(sorted((node_1, node_2))))
         
         edge_index = list(edge_index)
-        # Dictionary of strut indices {(node 1, node 2): indices} to reduce runtime by avoiding list search.
+        # Dictionary of strut indices {(node 1, node 2): index} to reduce runtime by avoiding list search.
         edge_index_indices = {nodes: index for index, nodes in enumerate(edge_index)}
         # Each strut must be represented by two separate edges in opposite directions to make the graph undirected (both (1, 2) and (2, 1)).
         edge_index.extend([nodes[::-1] for nodes in edge_index])
@@ -357,25 +396,30 @@ def mask_of_active_nodes(strut_numbers: list, struts: list, node_numbers: np.nda
 def read_pickle(path: str) -> Any:
     with open(path, 'rb') as f:
         data = pickle.load(f)
-    print(f"Loaded {type(data)} from {path}.")
+    print(f"Loaded {type(data)} with length {len(data)} from {path}.")
     return data
 
 def write_pickle(data: Any, path: str) -> None:
     with open(path, 'wb') as f:
         pickle.dump(data, f)
-    print(f"Saved {type(data)} to {path}.")
+    print(f"Saved {type(data)} with length {len(data)} to {path}.")
 
 
 if __name__ == "__main__":
-    inputs = read_inputs()
-    outputs = read_outputs()
-    inputs = augment_inputs(inputs)
-    outputs = augment_outputs(outputs)
+    # inputs = read_inputs()
+    # outputs = read_outputs()
+    # inputs = augment_inputs(inputs)
+    # outputs = augment_outputs(outputs)
 
-    masked_inputs = apply_mask_inputs(inputs, outputs)
-    adjacency = convert_outputs_to_adjacency(outputs)
-    write_pickle(masked_inputs, 'Training_Data_10/inputs.pickle')
-    write_pickle(adjacency, 'Training_Data_10/outputs.pickle')
+    # masked_inputs = apply_mask_inputs(inputs, outputs)
+    # adjacency = convert_outputs_to_adjacency(outputs)
+    # write_pickle(masked_inputs, 'Training_Data_10/inputs.pickle')
+    # write_pickle(adjacency, 'Training_Data_10/outputs.pickle')
     
-    graphs = convert_dataset_to_graph(inputs, outputs)
-    write_pickle(graphs, 'Training_Data_10/graphs.pickle')
+    # graphs = convert_dataset_to_graph(inputs, outputs)
+    # write_pickle(graphs, 'Training_Data_10/graphs.pickle')
+
+    outputs = read_outputs()
+    outputs = augment_outputs(outputs)
+    vector = convert_outputs_to_vector(outputs)
+    write_pickle(vector, 'Training_Data_10/outputs_vector.pickle')

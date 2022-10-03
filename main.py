@@ -13,6 +13,7 @@ import torch_geometric
 from datasets import *
 import metrics
 from models import *
+from visualization import *
 
 
 def plot_loss(figure, epochs: list, loss: List[list], labels: List[str], start_epoch: int = None) -> None:
@@ -29,15 +30,13 @@ def plot_loss(figure, epochs: list, loss: List[list], labels: List[str], start_e
     axis = figure.add_subplot(1, 1, 1)  # Number of rows, number of columns, index
     
     # markers = (".:", ".-")
-    # colors = (Colors.BLUE, Colors.ORANGE)
 
     # Plot each set of loss values.
     for i, loss_i in enumerate(loss):
         if not len(loss_i):
             continue
-        # color = colors[i % len(colors)]
         axis.plot(epochs[:len(loss_i)], loss_i, ".-", label=labels[i])
-        axis.annotate(f"{loss_i[-1]:,.2f}", (epochs[-1 - (len(epochs)-len(loss_i))], loss_i[-1]), fontsize=10)
+        axis.annotate(f"{loss_i[-1]:,.2e}", (epochs[-1 - (len(epochs)-len(loss_i))], loss_i[-1]), fontsize=10)
     
     # # Plot a vertical line indicating when the current training session began.
     # if start_epoch:
@@ -458,6 +457,17 @@ def main(
 
         if evaluate:
             results = evaluate_regression(outputs, labels, inputs, dataset, queue=queue, info_gui=info_gui)
+        
+        # lattice = convert_vector_to_lattice(outputs[0, ...])
+        # visualize_lattice(*lattice)
+
+        # metrics.plot_error_by_label(outputs, labels)
+        # lattice = convert_adjacency_to_lattice(outputs[0, ...])
+        # visualize_lattice(*lattice)
+
+        # h = 0
+        # for i in range(5):
+        #     metrics.plot_adjacency(outputs[i, h:h+500, :], labels[i, h:h+500, :])
 
 
 if __name__ == "__main__":
@@ -466,14 +476,14 @@ if __name__ == "__main__":
         "train_existing": not True,
         "save_model_every": 5,
 
-        "epoch_count": 10,
+        "epoch_count": 5,
         "learning_rate": 1e-3,
         "decay_learning_rate": not True,
-        "batch_sizes": (16, 64, 64),
+        "batch_sizes": (32, 64, 64),
         "training_split": (0.8, 0.1, 0.1),
         
-        "dataset": GnnDataset(),
-        "Model": LatticeGnn,
+        "dataset": VectorDataset(),
+        "Model": ResNet,
         "Optimizer": torch.optim.Adam,
         "Loss": nn.MSELoss,
         

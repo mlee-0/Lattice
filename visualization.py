@@ -148,14 +148,32 @@ def convert_adjacency_to_lattice(array: np.ndarray) -> Tuple[list, list, list]:
                 
                 # Skip duplicate struts.
                 strut = tuple(sorted((node_1, node_2)))
-                if strut in unique_struts:
-                    continue
-                else:
+                if strut not in unique_struts:
                     unique_struts.add(strut)
 
-                coordinates_1.append(tuple(coordinates[node_1 - 1]))
-                coordinates_2.append(tuple(coordinates[node_2 - 1]))
-                diameters.append(diameter)
+                    coordinates_1.append(tuple(coordinates[node_1 - 1]))
+                    coordinates_2.append(tuple(coordinates[node_2 - 1]))
+                    diameters.append(diameter)
+    
+    return coordinates_1, coordinates_2, diameters
+
+def convert_vector_to_lattice(vector: np.ndarray) -> Tuple[list, list, list]:
+    """Convert a 1D array into a tuple of coordinates and diameters."""
+    
+    struts = read_struts()
+    coordinates = read_coordinates()
+    strut_numbers = get_unique_strut_numbers(struts)
+
+    coordinates_1, coordinates_2, diameters = [], [], []
+
+    for i, diameter in enumerate(vector):
+        if diameter > 0:
+            node_1, node_2 = struts[strut_numbers[i] - 1]
+            assert node_1 < node_2
+
+            coordinates_1.append(tuple(coordinates[node_1 - 1]))
+            coordinates_2.append(tuple(coordinates[node_2 - 1]))
+            diameters.append(diameter)
     
     return coordinates_1, coordinates_2, diameters
 
@@ -193,10 +211,11 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         line.SetResolution(0)
         line.Update()
 
+        radius = diameter / 2
         tube = vtk.vtkTubeFilter()
         tube.SetInputData(line.GetOutput())
-        tube.SetRadius(diameter / 2)
-        tube.SetNumberOfSides(3)
+        tube.SetRadius(radius)
+        tube.SetNumberOfSides(5)
         
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputConnection(tube.GetOutputPort())
@@ -214,12 +233,17 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
 
 
 if __name__ == "__main__":
-    # lattice = convert_output_to_lattice(read_outputs(1)[0])
+    # lattice = convert_output_to_lattice(read_outputs(3)[2])
     # visualize_lattice(*lattice)
 
-    with open('Training_Data_10/outputs.pickle', 'rb') as f:
-        outputs = pickle.load(f)
-    lattice = convert_adjacency_to_lattice(np.array(outputs[0, :, :]))
+    # with open('Training_Data_10/outputs.pickle', 'rb') as f:
+    #     outputs = pickle.load(f)
+    # lattice = convert_adjacency_to_lattice(np.array(outputs[0, :, :]))
+    # visualize_lattice(*lattice)
+    
+    with open('Training_Data_10/outputs_vector.pickle', 'rb') as f:
+        vector = pickle.load(f)
+    lattice = convert_vector_to_lattice(vector[1000, :])
     visualize_lattice(*lattice)
 
     # with open("Training_Data_10/graphs.pickle", 'rb') as f:

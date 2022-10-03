@@ -44,10 +44,6 @@ def fraction_of_zeros_incorrect(p, y) -> float:
 def plot_error_by_label(p, y):
     """Plot the errors vs. true values sorted from lowest to highest. Intended to reveal which ranges of values produce inaccurate predictions."""
     p, y = p.flatten(), y.flatten()
-    x = sorted(
-        np.concatenate([p[:, None], y[:, None]], axis=1),
-        key=lambda row: row[1]
-    )
     p, y = np.array(sorted(
         np.concatenate([p[:, None], y[:, None]], axis=1),
         key=lambda row: row[1]

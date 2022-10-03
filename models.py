@@ -10,7 +10,7 @@ def get_parameter_count(model: torch.nn.Module) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-class LatticeCnn(torch.nn.Module):
+class Cnn(torch.nn.Module):
     """3D CNN whose input is a 3D array of densities and whose output is a 1D array of strut diameters."""
 
     def __init__(self, device: str='cpu') -> None:
@@ -34,8 +34,9 @@ class LatticeCnn(torch.nn.Module):
 
         # Output size, representing the maximum number of struts possible.
         self.shape_output = (
-            int(h * w * d),
-            int(strut_neighborhood ** 3 - 1),
+            16309,
+            # int(h * w * d),
+            # int(strut_neighborhood ** 3 - 1),
         )
         size_output = int(np.prod(self.shape_output))
 
@@ -77,7 +78,7 @@ class LatticeCnn(torch.nn.Module):
 
         return x
 
-class LatticeResNet(torch.nn.Module):
+class ResNet(torch.nn.Module):
     """3D ResNet-based CNN whose input is a 3D array of densities and whose output is a 1D array of strut diameters."""
     def __init__(self, device: str='cpu') -> None:
         super().__init__()
@@ -96,8 +97,9 @@ class LatticeResNet(torch.nn.Module):
 
         # Output size, representing the maximum number of struts possible.
         self.shape_output = (
-            int(h * w * d),
-            int(strut_neighborhood ** 3 - 1),
+            16309,
+        #     int(h * w * d),
+        #     int(strut_neighborhood ** 3 - 1),
         )
         size_output = int(np.prod(self.shape_output))
 
@@ -147,8 +149,8 @@ class LatticeResNet(torch.nn.Module):
 
         return x
 
-class LatticeGnn(torch.nn.Module):
-    """A GNN whose input is a fully-connected graph of node locations and whose output is a graph of strut diameters."""
+class Gnn(torch.nn.Module):
+    """GNN whose input is a graph of node densities and coordinates and whose output is a 2D tensor of strut diameters with shape (number of struts, 1)."""
 
     def __init__(self, device: str='cpu') -> None:
         super().__init__()
