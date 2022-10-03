@@ -5,7 +5,7 @@ import copy
 import glob
 import os
 import pickle
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 import numpy as np
 from PIL import Image
@@ -87,6 +87,7 @@ def read_inputs(count: int=None) -> torch.tensor:
         # Concatenate each image.
         for d, file in enumerate(files):
             with Image.open(file) as f:
+                # Transpose image so that X corresponds to image width and Y corresponds to image height.
                 inputs[i, 0, ..., d] = np.asarray(f, dtype=data_type).transpose()
 
     inputs = torch.tensor(inputs)
@@ -353,43 +354,28 @@ def mask_of_active_nodes(strut_numbers: list, struts: list, node_numbers: np.nda
     )
     return mask
 
-def preprocess_cnn(count: int=None):
-    inputs = read_inputs(count)
-    outputs = read_outputs(count)
-    inputs = augment_inputs(inputs)
-    outputs = augment_outputs(outputs)
-    inputs = apply_mask_inputs(inputs, outputs)
-    outputs = convert_outputs_to_adjacency(outputs)
+def read_pickle(path: str) -> Any:
+    with open(path, 'rb') as f:
+        data = pickle.load(f)
+    print(f"Loaded {type(data)} from {path}.")
+    return data
 
-    with open('Training_Data_10/inputs.pickle', 'wb') as f:
-        pickle.dump(inputs, f)
-    with open('Training_Data_10/outputs.pickle', 'wb') as f:
-        pickle.dump(outputs, f)
+def write_pickle(data: Any, path: str) -> None:
+    with open(path, 'wb') as f:
+        pickle.dump(data, f)
+    print(f"Saved {type(data)} to {path}.")
 
-def preprocess_gnn(count: int=None):
-    inputs = read_inputs(count)
-    outputs = read_outputs(count)
-    inputs = augment_inputs(inputs)
-    outputs = augment_outputs(outputs)
-    graphs = convert_dataset_to_graph(inputs, outputs)
-    with open('Training_Data_10/graphs.pickle', 'wb') as f:
-        pickle.dump(graphs, f)
 
 if __name__ == "__main__":
-    preprocess_cnn()
+    inputs = read_inputs()
+    outputs = read_outputs()
+    inputs = augment_inputs(inputs)
+    outputs = augment_outputs(outputs)
 
-    # # Visualize the neighborhood of a node
-    # struts = read_struts()
-    # node_numbers = make_node_numbers()
-    # # struts = {tuple(sorted(strut)) for strut in struts}
-    # struts = [strut for strut in struts if strut[0] == 50000]
-    # nodes = set()
-    # for strut in struts:
-    #     nodes.add(strut[0])
-    #     nodes.add(strut[1])
-    # array = np.zeros_like(node_numbers)
-    # for node in nodes:
-    #     array[node_numbers == node] = 1
-    # # array = array[:10, :10, :10]
-    # from visualization import plot_nodes
-    # plot_nodes(array, 0.5)
+    masked_inputs = apply_mask_inputs(inputs, outputs)
+    adjacency = convert_outputs_to_adjacency(outputs)
+    write_pickle(masked_inputs, 'Training_Data_10/inputs.pickle')
+    write_pickle(adjacency, 'Training_Data_10/outputs.pickle')
+    
+    graphs = convert_dataset_to_graph(inputs, outputs)
+    write_pickle(graphs, 'Training_Data_10/graphs.pickle')
