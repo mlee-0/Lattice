@@ -28,7 +28,7 @@ class AdjacencyDataset(torch.utils.data.Dataset):
         time_start = time.time()
         
         self.inputs = read_pickle(os.path.join(DATASET_FOLDER, 'inputs.pickle')).float()
-        self.outputs = read_pickle(os.path.join(DATASET_FOLDER, 'outputs.pickle')).float()
+        self.outputs = read_pickle(os.path.join(DATASET_FOLDER, 'outputs_adjacency.pickle')).float()
         
         if count is not None:
             self.inputs = self.inputs[:count, ...]
@@ -84,8 +84,9 @@ class GraphDataset(torch_geometric.data.Dataset):
         inputs = torch.cat([graph.x.flatten() for graph in self.dataset])
         mean, std = inputs.mean(), inputs.std()
         for graph in self.dataset:
-            graph.x -= mean
-            graph.x /= std
+            graph.x = graph.x[:, :1]  # Remove coordinate information
+            # graph.x -= mean
+            # graph.x /= std
 
     def __len__(self) -> int:
         return len(self.dataset)

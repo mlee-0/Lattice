@@ -79,7 +79,8 @@ def read_inputs(count: int=None) -> torch.tensor:
     inputs = np.empty((len(folders), 1, *INPUT_SHAPE), dtype=data_type)
 
     for i, folder in enumerate(folders):
-        print(f"Reading images in {folder}...", end='\r' if i < len(folders) - 1 else None)
+        if i % 10 == 0:
+            print(f"Reading images in {folder}...", end='\r' if i < len(folders) - 1 else None)
 
         files = glob.glob(os.path.join(directory, folder, '*.jpg'))
         files.sort(key=lambda file: int(os.path.basename(file).split('.')[0].split('_')[1]))
@@ -110,7 +111,8 @@ def read_outputs(count: int=None) -> List[List[Tuple[int, int]]]:
     outputs = []
 
     for i, file in enumerate(files):
-        print(f"Reading file {file}...", end='\r' if i < len(files) - 1 else None)
+        if i % 10 == 0:
+            print(f"Reading file {file}...", end='\r' if i < len(files) - 1 else None)
 
         with open(file, 'r') as f:
             # Ignore the header line and lines with zero diameters.
@@ -313,11 +315,12 @@ def convert_outputs_to_vector(outputs: list) -> np.ndarray:
 
     return vector
 
-def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_geometric.data.Data]:
+def convert_dataset_to_graph(inputs: torch.tensor, outputs: list) -> List[torch_geometric.data.Data]:
     """Convert a 5D array of input data and a list of output data to a list of graphs."""
 
     assert inputs.shape[0] == len(outputs), f"Number of inputs {inputs.shape[0]} and number of outputs {len(outputs)} do not match."
     n = len(outputs)
+    h, w, d = inputs.size()[2:5]
 
     node_numbers = make_node_numbers()
     struts = read_struts()
@@ -340,6 +343,8 @@ def convert_dataset_to_graph(inputs: np.ndarray, outputs: list) -> List[torch_ge
         
         for x, y, z in indices:
             node_1 = node_numbers[x, y, z]
+            # # Insert the average density [0, 1] in the 3x3 neighborhood of each node.
+            # node_features[node_1-1, 0] = torch.mean(inputs[i, 0, max(0, x-1):min(h, x+2), max(0, y-1):min(w, y+2), max(0, z-1):min(d, z+2)].float()) / 255
             # Insert density [0, 1] of each node.
             node_features[node_1-1, 0] = inputs[i, 0, x, y, z] / 255
             # Insert coordinates of each node.
@@ -406,20 +411,20 @@ def write_pickle(data: Any, path: str) -> None:
 
 
 if __name__ == "__main__":
-    # inputs = read_inputs()
-    # outputs = read_outputs()
+    inputs = read_inputs()
+    outputs = read_outputs()
     # inputs = augment_inputs(inputs)
     # outputs = augment_outputs(outputs)
 
     # masked_inputs = apply_mask_inputs(inputs, outputs)
     # adjacency = convert_outputs_to_adjacency(outputs)
     # write_pickle(masked_inputs, 'Training_Data_10/inputs.pickle')
-    # write_pickle(adjacency, 'Training_Data_10/outputs.pickle')
+    # write_pickle(adjacency, 'Training_Data_10/outputs_adjacency.pickle')
     
-    # graphs = convert_dataset_to_graph(inputs, outputs)
-    # write_pickle(graphs, 'Training_Data_10/graphs.pickle')
+    graphs = convert_dataset_to_graph(inputs, outputs)
+    write_pickle(graphs, 'Training_Data_10/graphs.pickle')
 
-    outputs = read_outputs()
-    outputs = augment_outputs(outputs)
-    vector = convert_outputs_to_vector(outputs)
-    write_pickle(vector, 'Training_Data_10/outputs_vector.pickle')
+    # outputs = read_outputs()
+    # outputs = augment_outputs(outputs)
+    # vector = convert_outputs_to_vector(outputs)
+    # write_pickle(vector, 'Training_Data_10/outputs_vector.pickle')

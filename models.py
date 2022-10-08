@@ -17,7 +17,7 @@ class Cnn(torch.nn.Module):
         super().__init__()
 
         h = w = d = 11
-        input_channels = 2
+        input_channels = 1
         strut_neighborhood = 3
         strut_neighborhood_radius = (strut_neighborhood - 1) / 2
 
@@ -35,8 +35,6 @@ class Cnn(torch.nn.Module):
         # Output size, representing the maximum number of struts possible.
         self.shape_output = (
             16309,
-            # int(h * w * d),
-            # int(strut_neighborhood ** 3 - 1),
         )
         size_output = int(np.prod(self.shape_output))
 
@@ -64,7 +62,7 @@ class Cnn(torch.nn.Module):
 
     def forward(self, x):
         batch_size = x.size(0)
-        x = torch.cat([x, torch.cat([self.index_channel] * batch_size, dim=0)], dim=1)
+        # x = torch.cat([x, torch.cat([self.index_channel] * batch_size, dim=0)], dim=1)
 
         x = self.convolution_1(x)
         x = self.convolution_2(x)
@@ -72,7 +70,7 @@ class Cnn(torch.nn.Module):
         x = self.convolution_bottleneck(x)
 
         x = self.global_pooling(x)
-        x = torch.sigmoid(x)
+        # x = torch.sigmoid(x)
 
         x = x.reshape((batch_size, *self.shape_output))
 
@@ -98,8 +96,6 @@ class ResNet(torch.nn.Module):
         # Output size, representing the maximum number of struts possible.
         self.shape_output = (
             16309,
-        #     int(h * w * d),
-        #     int(strut_neighborhood ** 3 - 1),
         )
         size_output = int(np.prod(self.shape_output))
 
@@ -145,6 +141,7 @@ class ResNet(torch.nn.Module):
         x = self.convolution_bottleneck_3(x)
 
         x = self.global_pooling(x)
+        # x = torch.sigmoid(x)
         x = x.reshape((batch_size, *self.shape_output))
 
         return x
@@ -156,17 +153,20 @@ class Gnn(torch.nn.Module):
         super().__init__()
 
         h = w = d = 11
-        input_channels = 4
+        input_channels = 1
 
         # Model size, defined as the number of output channels in the first layer. Numbers of channels in subsequent layers are multiples of this number, so this number controls the overall model size.
-        c = 1
+        c = 4
+
+        # Type of aggregation to use in the message passing layers.
+        aggregation = 'mean'
 
         self.convolution = torch_geometric.nn.Sequential('x, edge_index', [
-            (torch_geometric.nn.GCNConv(in_channels=input_channels, out_channels=c*1), 'x, edge_index -> x'),
-            torch.nn.ReLU(),
-            (torch_geometric.nn.GCNConv(in_channels=c*1, out_channels=c*2), 'x, edge_index -> x'),
-            torch.nn.ReLU(),
-            (torch_geometric.nn.GCNConv(in_channels=c*2, out_channels=c*4), 'x, edge_index -> x'),
+            (torch_geometric.nn.GCNConv(in_channels=input_channels, out_channels=c*1, aggr=aggregation), 'x, edge_index -> x'),
+            # torch.nn.ReLU(),
+            (torch_geometric.nn.GCNConv(in_channels=c*1, out_channels=c*2, aggr=aggregation), 'x, edge_index -> x'),
+            # torch.nn.ReLU(),
+            # (torch_geometric.nn.GCNConv(in_channels=c*2, out_channels=c*4, aggr=aggregation), 'x, edge_index -> x'),
         ])
     
     def forward(self, x, edge_index):
@@ -175,14 +175,27 @@ class Gnn(torch.nn.Module):
 
         # Predict edge values with shape (number of edges across batch,).
         x = torch.sum(
-            x[edge_index[0, :], :] * x[edge_index[1, :], :],
+            (x[edge_index[0, :], :] + x[edge_index[1, :], :]) / 2,
             dim=-1,
         )
         # Average each pair of edges that represent the same strut (for example, (1, 2) and (2, 1)) with shape (half the original number of edges, 1). The second dimension is included for compatibility with the labels used during training.
         x = torch.mean(x.view([2, x.size(-1)//2]), dim=0)[:, None]
-        # x = x[:x.size(-1)//2][:, None]
 
         # Constrain output values to [0, 1].
         x = torch.sigmoid(x)
 
         return x
+    
+
+"""
+GNN
+- Aggregation add (default): 2.47e-01, 0.429 MAE
+- Aggregation mean: 2.29e-02, 0.121 MAE
+Use mean from here
+
+- No coordinate information in node feature matrix: 2.34e-02, 0.122 MAE
+- Calculate edge values by averaging features (1 layer): 2.30e-02, 0.121 MAE
+    - With 2 layers: 2.29e-02, 0.121 MAE
+- No relu: 2.19e-02, 0.118 MAE
+- 2 layers, no relu: 2.47e-02, 0.125 MAE
+"""
