@@ -1,3 +1,4 @@
+import copy
 import os
 from queue import Queue
 import time
@@ -63,14 +64,14 @@ def load_model(filepath: str, device: str) -> dict:
         print(f"Loaded model from {filepath} trained for {checkpoint['epoch']} epochs.")
         return checkpoint
 
-def train_regression(
+def train_all(
     device: str, epoch_count: int, checkpoint: dict, filepath_model: str, save_model_every: int,
     model: nn.Module, optimizer: torch.optim.Optimizer, loss_function: nn.Module,
     dataset, train_dataloader: DataLoader, validate_dataloader: DataLoader,
     scheduler = None,
     queue=None, queue_to_main=None, info_gui: dict=None,
 ) -> nn.Module:
-    """Train and validate the given regression model. Return the model after finishing training."""
+    """Train and validate the given model and return the model after finishing training."""
 
     # Load the previous training history.
     if checkpoint is not None:
@@ -249,11 +250,11 @@ def train_regression(
     
     return model
 
-def test_regression(
+def test_all(
     device: str, model: nn.Module, loss_function: nn.Module, dataset: Dataset, test_dataloader: DataLoader,
     queue=None, queue_to_main=None, info_gui: dict=None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Test the given regression model and return its outputs and corresponding labels and inputs."""
+    """Test the given model and return its outputs and corresponding labels and inputs."""
 
     # Initialize values to send to the GUI.
     if queue:
@@ -300,23 +301,28 @@ def test_regression(
     loss /= batch
     print(f"Testing loss: {loss:,.2e}")
     
-    # Concatenate testing results from all batches into a single array.
-    inputs = np.concatenate(inputs, axis=0)
-    outputs = np.concatenate(outputs, axis=0)
-    labels = np.concatenate(labels, axis=0)
+    # # Concatenate testing results from all batches into a single array.
+    # inputs = np.concatenate(inputs, axis=0)
+    # outputs = np.concatenate(outputs, axis=0)
+    # labels = np.concatenate(labels, axis=0)
 
-    if queue:
-        info_gui["info_metrics"] = {f"Loss ({loss_function})": loss}
-        info_gui["test_inputs"] = inputs
-        info_gui["test_outputs"] = outputs
-        info_gui["test_labels"] = labels
-        info_gui["test_max_value"] = dataset.max_value
-        queue.put(info_gui)
+    # if queue:
+    #     info_gui["info_metrics"] = {f"Loss ({loss_function})": loss}
+    #     info_gui["test_inputs"] = inputs
+    #     info_gui["test_outputs"] = outputs
+    #     info_gui["test_labels"] = labels
+    #     info_gui["test_max_value"] = dataset.max_value
+    #     queue.put(info_gui)
 
     return outputs, labels, inputs
 
-def evaluate_regression(outputs: np.ndarray, labels: np.ndarray, inputs: np.ndarray, dataset: Dataset, queue=None, info_gui: dict=None):
+def evaluate_regression(outputs: List[np.ndarray], labels: List[np.ndarray], inputs: List[np.ndarray], dataset: Dataset, queue=None, info_gui: dict=None):
     """Calculate and return evaluation metrics."""
+
+    # Concatenate results from all batches into a single array.
+    inputs = np.concatenate(inputs, axis=0)
+    outputs = np.concatenate(outputs, axis=0)
+    labels = np.concatenate(labels, axis=0)
 
     results = metrics.evaluate(outputs, labels)
     for metric, value in results.items():
@@ -425,7 +431,7 @@ def main(
         queue.put(info_gui)
 
     if train:
-        model = train_regression(
+        model = train_all(
             device = device,
             epoch_count = epoch_count,
             checkpoint = checkpoint,
@@ -444,7 +450,7 @@ def main(
             )
     
     if test:
-        outputs, labels, inputs = test_regression(
+        outputs, labels, inputs = test_all(
             device = device,
             model = model,
             loss_function = loss_function,
@@ -458,12 +464,37 @@ def main(
         if evaluate:
             results = evaluate_regression(outputs, labels, inputs, dataset, queue=queue, info_gui=info_gui)
         
+        # plt.figure()
+        # plt.subplot(1, 2, 1)
+        # plt.imshow(outputs[0, 500:1000, :], cmap='gray')
+        # plt.subplot(1, 2, 2)
+        # plt.imshow(labels[0, 500:1000, :], cmap='gray')
+        # plt.show()
+
+
+        # graph = copy.deepcopy(test_dataset[0])
+        # i = 1527
+        # graph.edge_attr = outputs[:i, :]
+        # graph.y = graph.y[:i, :]
+
+        i = 3
+
+        # Histogram of predicted values.
+        plt.hist(outputs[i], bins=20)
+        plt.show()
+
+        graph = test_dataset[i]
+        graph.edge_attr = outputs[i]
+        graph.y = labels[i]
+        lattice = convert_graph_to_lattice(graph)
+        
         # lattice = convert_vector_to_lattice(outputs[0, ...])
-        # visualize_lattice(*lattice)
+        
+        # lattice = convert_adjacency_to_lattice(labels[0, ...])
 
         # metrics.plot_error_by_label(outputs, labels)
         # lattice = convert_adjacency_to_lattice(outputs[0, ...])
-        # visualize_lattice(*lattice)
+        visualize_lattice(*lattice, [_.item() for _ in graph.y])
 
         # h = 0
         # for i in range(5):
@@ -476,14 +507,14 @@ if __name__ == "__main__":
         "train_existing": not True,
         "save_model_every": 5,
 
-        "epoch_count": 5,
+        "epoch_count": 10,
         "learning_rate": 1e-3,
         "decay_learning_rate": not True,
-        "batch_sizes": (32, 64, 64),
+        "batch_sizes": (16, 64, 1),
         "training_split": (0.8, 0.1, 0.1),
         
-        "dataset": VectorDataset(),
-        "Model": ResNet,
+        "dataset": GraphDataset(),
+        "Model": Gnn,
         "Optimizer": torch.optim.Adam,
         "Loss": nn.MSELoss,
         
@@ -493,3 +524,5 @@ if __name__ == "__main__":
     }
 
     main(**kwargs)
+# Cnn:      1.29e-02, 0.336 MAE among nonzero
+# ResNet:   1.15e-02, 0.292 MAE among nonzero
