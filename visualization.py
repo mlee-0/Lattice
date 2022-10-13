@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 # import networkx as nx
 import numpy as np
 import vtk
-from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
+from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor  # type: ignore
 
 from datasets import *
 from preprocessing import *
@@ -192,7 +192,7 @@ def convert_graph_to_lattice(graph) -> Tuple[list, list, list]:
 
     return coordinates_1, coordinates_2, diameters
 
-def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float]) -> None:
+def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float], true_diameters: List[float]=None) -> None:
     """Start a visualization of a lattice defined as a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters. All lists must be the same length."""
 
     assert len(locations_1) == len(locations_2) == len(diameters)
@@ -204,7 +204,10 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
     iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
     iren.SetRenderWindow(window)
 
-    for (x1, y1, z1), (x2, y2, z2), diameter in zip(locations_1, locations_2, diameters):
+    if true_diameters is not None:
+        max_error = np.abs(np.array(diameters) - np.array(true_diameters)).max()
+
+    for i, ((x1, y1, z1), (x2, y2, z2), diameter) in enumerate(zip(locations_1, locations_2, diameters)):
         line = vtk.vtkLineSource()
         line.SetPoint1(x1, y1, z1)
         line.SetPoint2(x2, y2, z2)
@@ -222,6 +225,16 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         actor = vtk.vtkActor()
         actor.SetMapper(mapper)
         # actor.GetProperty().SetLighting(False)
+        
+        # Set the color representing the magnitude of the error.
+        if true_diameters is not None:
+            error = abs(diameter - true_diameters[i])
+            ratio = error / max_error
+
+            color_error_0 = np.array([1, 1, 1])
+            color_error_1 = np.array([1, 0, 0])
+            color = ratio * color_error_1 + (1 - ratio) * color_error_0
+            actor.GetProperty().SetColor(*color)
 
         ren.AddActor(actor)
     
@@ -245,11 +258,11 @@ if __name__ == "__main__":
     # lattice = convert_vector_to_lattice(vector[1000, :])
     # visualize_lattice(*lattice)
 
-    inputs = read_pickle('Training_Data_10/inputs.pickle')
-    visualize_input(inputs[2, 0, ...], 1)
+    # inputs = read_pickle('Training_Data_10/inputs.pickle')
+    # visualize_input(inputs[2, 0, ...], 1)
 
     graphs = read_pickle('Training_Data_10/graphs.pickle')
-    lattice = convert_graph_to_lattice(graphs[2])
+    lattice = convert_graph_to_lattice(graphs[0])
     visualize_lattice(*lattice)
     
     # with open("Training_Data_10/inputs.pickle", 'rb') as f:
