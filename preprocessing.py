@@ -315,6 +315,28 @@ def convert_outputs_to_vector(outputs: list) -> np.ndarray:
 
     return vector
 
+def convert_outputs_to_individual_struts(outputs: list) -> List[Tuple[int, Tuple[int, int, int], Tuple[int, int, int], float]]:
+    """Convert the given output data to a list of tuples containing (input image index, a tuple of (X, Y, Z) coordinates corresponding to node 1 of the strut, a tuple of (X, Y, Z) coordinates corresponding to node 2 of the strut, diameter)."""
+
+    node_numbers = make_node_numbers()
+    struts = read_struts()
+
+    # Dictionary of node indices {node: (x, y, z)} to reduce runtime by avoiding search.
+    node_indices = {node_numbers[x, y, z]: (x, y, z) for x in range(node_numbers.shape[0]) for y in range(node_numbers.shape[1]) for z in range(node_numbers.shape[2])}
+
+    data = []
+    for i, output in enumerate(outputs):
+        for strut, d in output:
+            node_1, node_2 = struts[strut - 1]
+            data.append((
+                i,
+                node_indices[node_1],
+                node_indices[node_2],
+                d,
+            ))
+    
+    return data
+
 def convert_dataset_to_graph(inputs: torch.tensor, outputs: list) -> List[torch_geometric.data.Data]:
     """Convert a 5D array of input data and a list of output data to a list of graphs."""
 
@@ -415,14 +437,17 @@ if __name__ == "__main__":
     outputs = read_outputs()
     # inputs = augment_inputs(inputs)
     # outputs = augment_outputs(outputs)
+    outputs_local = convert_outputs_to_individual_struts(outputs)
+    write_pickle(inputs, 'Training_Data_10/inputs.pickle')
+    write_pickle(outputs_local, 'Training_Data_10/outputs_local.pickle')
 
     # masked_inputs = apply_mask_inputs(inputs, outputs)
     # adjacency = convert_outputs_to_adjacency(outputs)
     # write_pickle(masked_inputs, 'Training_Data_10/inputs.pickle')
     # write_pickle(adjacency, 'Training_Data_10/outputs_adjacency.pickle')
     
-    graphs = convert_dataset_to_graph(inputs, outputs)
-    write_pickle(graphs, 'Training_Data_10/graphs.pickle')
+    # graphs = convert_dataset_to_graph(inputs, outputs)
+    # write_pickle(graphs, 'Training_Data_10/graphs.pickle')
 
     # outputs = read_outputs()
     # outputs = augment_outputs(outputs)

@@ -72,11 +72,12 @@ def evaluate(p, y) -> dict:
     results = {
         'MAE': mae(p, y),
         'MSE': mse(p, y),
-        'MAE among nonzeros': mae_nonzeros(p, y),
+        # 'MAE among nonzeros': mae_nonzeros(p, y),
         'Minimum error': min_error(p, y),
         'Maximum error': max_error(p, y),
-        'Zeros correct': fraction_of_zeros_correct(p, y),
-        'Zeros incorrect': fraction_of_zeros_incorrect(p, y),
+        # 'Zeros correct': fraction_of_zeros_correct(p, y),
+        # 'Zeros incorrect': fraction_of_zeros_incorrect(p, y),
+        # 'Fraction out of bounds': ((p < 0) + (p > 1)).sum() / p.size
     }
     
     return results

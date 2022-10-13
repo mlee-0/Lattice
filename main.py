@@ -134,7 +134,7 @@ def train_all(
             optimizer.step()
 
             if batch % 10 == 0:
-                print(f"Batch {batch}/{len(train_dataloader)}: {loss/batch:,.2e}...", end="\r")
+                print(f"Batch {batch}/{len(train_dataloader)}: {loss_current.item():,.2e}...", end="\r")
                 if queue:
                     info_gui["progress_batch"] = (batch, len(train_dataloader)+len(validate_dataloader))
                     info_gui["training_loss"] = [*training_loss, loss/batch]
@@ -387,14 +387,19 @@ def main(
     else:
         checkpoint = None
 
-    # Create the dataset and split it into training, validation, and testing datasets.
+    # Split the dataset into training, validation, and testing datasets.
     sample_size = len(dataset)
-    train_size, validate_size, test_size = [int(split * sample_size) for split in training_split]
-    train_dataset, validate_dataset, test_dataset = torch.utils.data.random_split(
-        dataset,
-        [train_size, validate_size, test_size],
-        generator=torch.Generator().manual_seed(42),
-    )
+    train_indices, validate_indices, test_indices = dataset.split_by_input(*training_split)
+    train_dataset = Subset(dataset, train_indices)
+    validate_dataset = Subset(dataset, validate_indices)
+    test_dataset = Subset(dataset, test_indices)
+    train_size, validate_size, test_size = len(train_dataset), len(validate_dataset), len(test_dataset)
+    # train_size, validate_size, test_size = [int(split * sample_size) for split in training_split]
+    # train_dataset, validate_dataset, test_dataset = torch.utils.data.random_split(
+    #     dataset,
+    #     [train_size, validate_size, test_size],
+    #     generator=torch.Generator().manual_seed(42),
+    # )
     print(f"Split {sample_size:,} samples into {train_size:,} training / {validate_size:,} validation / {test_size:,} testing.")
 
     batch_size_train, batch_size_validate, batch_size_test = batch_sizes
@@ -483,10 +488,10 @@ def main(
         plt.hist(outputs[i], bins=20)
         plt.show()
 
-        graph = test_dataset[i]
-        graph.edge_attr = outputs[i]
-        graph.y = labels[i]
-        lattice = convert_graph_to_lattice(graph)
+        # graph = test_dataset[i]
+        # graph.edge_attr = outputs[i]
+        # graph.y = labels[i]
+        # lattice = convert_graph_to_lattice(graph)
         
         # lattice = convert_vector_to_lattice(outputs[0, ...])
         
@@ -494,7 +499,7 @@ def main(
 
         # metrics.plot_error_by_label(outputs, labels)
         # lattice = convert_adjacency_to_lattice(outputs[0, ...])
-        visualize_lattice(*lattice, [_.item() for _ in graph.y])
+        # visualize_lattice(*lattice, [_.item() for _ in graph.y])
 
         # h = 0
         # for i in range(5):
@@ -510,11 +515,11 @@ if __name__ == "__main__":
         "epoch_count": 10,
         "learning_rate": 1e-3,
         "decay_learning_rate": not True,
-        "batch_sizes": (16, 64, 1),
+        "batch_sizes": (32, 64, 64),
         "training_split": (0.8, 0.1, 0.1),
         
-        "dataset": GraphDataset(),
-        "Model": Gnn,
+        "dataset": LocalDataset(100),
+        "Model": ResNetLocal,
         "Optimizer": torch.optim.Adam,
         "Loss": nn.MSELoss,
         
@@ -524,5 +529,3 @@ if __name__ == "__main__":
     }
 
     main(**kwargs)
-# Cnn:      1.29e-02, 0.336 MAE among nonzero
-# ResNet:   1.15e-02, 0.292 MAE among nonzero

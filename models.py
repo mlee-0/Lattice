@@ -9,6 +9,14 @@ def get_parameter_count(model: torch.nn.Module) -> int:
     """Get the number of learnable parameters in the model."""
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
+# Function that returns a residual block.
+def residual(in_channels, out_channels):
+    return torch.nn.Sequential(
+        torch.nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding='same'),
+        torch.nn.ReLU(inplace=False),
+        torch.nn.Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding='same'),
+    )
+
 
 class Cnn(torch.nn.Module):
     """3D CNN whose input is a 3D array of densities and whose output is a 1D array of strut diameters."""
@@ -99,13 +107,6 @@ class ResNet(torch.nn.Module):
         )
         size_output = int(np.prod(self.shape_output))
 
-        # Function that returns a residual block.
-        residual = lambda in_channels, out_channels: torch.nn.Sequential(
-            torch.nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding='same'),
-            torch.nn.ReLU(inplace=False),
-            torch.nn.Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding='same'),
-        )
-
         self.convolution_1 = torch.nn.Sequential(
             torch.nn.Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=2, padding=1),
             torch.nn.BatchNorm3d(c*1),
@@ -143,6 +144,61 @@ class ResNet(torch.nn.Module):
         x = self.global_pooling(x)
         # x = torch.sigmoid(x)
         x = x.reshape((batch_size, *self.shape_output))
+
+        return x
+
+class ResNetLocal(torch.nn.Module):
+    """3D ResNet-based CNN whose input is a 3D array of densities and whose output is a single strut diameter."""
+
+    def __init__(self, device: str='cpu') -> None:
+        super().__init__()
+        self.device = device
+
+        h = w = d = 11
+        input_channels = 2
+        strut_neighborhood = 3
+        strut_neighborhood_radius = (strut_neighborhood - 1) / 2
+
+        # Number of output channels in the first layer.
+        c = 2
+
+        self.convolution_1 = torch.nn.Sequential(
+            torch.nn.Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=2, padding=1),
+            torch.nn.BatchNorm3d(c*1),
+            torch.nn.ReLU(inplace=True),
+        )
+        self.convolution_2 = torch.nn.Sequential(
+            torch.nn.Conv3d(in_channels=c*1, out_channels=c*2, kernel_size=3, stride=2, padding=1),
+            torch.nn.BatchNorm3d(c*2),
+            torch.nn.ReLU(inplace=True),
+        )
+
+        self.residual_1 = residual(c*2, c*2)
+        self.convolution_bottleneck_1 = torch.nn.Conv3d(in_channels=c*2, out_channels=c*4, kernel_size=1)
+        self.residual_2 = residual(c*4, c*4)
+        self.convolution_bottleneck_2 = torch.nn.Conv3d(in_channels=c*4, out_channels=c*8, kernel_size=1)
+        self.residual_3 = residual(c*8, c*8)
+        self.convolution_bottleneck_3 = torch.nn.Conv3d(in_channels=c*8, out_channels=c*16, kernel_size=1)
+
+        self.global_pooling = torch.nn.AdaptiveAvgPool3d(output_size=(1, 1, 1))
+        self.linear = torch.nn.Linear(in_features=c*16, out_features=1)
+
+    def forward(self, x):
+        batch_size = x.size(0)
+
+        x = self.convolution_1(x)
+        x = self.convolution_2(x)
+
+        x = torch.relu(x + self.residual_1(x))
+        x = self.convolution_bottleneck_1(x)
+        x = torch.relu(x + self.residual_2(x))
+        x = self.convolution_bottleneck_2(x)
+        x = torch.relu(x + self.residual_3(x))
+        x = self.convolution_bottleneck_3(x)
+
+        x = self.global_pooling(x).squeeze()
+        x = self.linear(x)
+        # x = torch.sigmoid(x)
 
         return x
 
