@@ -163,16 +163,49 @@ class Gnn(torch.nn.Module):
 
         self.convolution = torch_geometric.nn.Sequential('x, edge_index', [
             (torch_geometric.nn.GCNConv(in_channels=input_channels, out_channels=c*1, aggr=aggregation), 'x, edge_index -> x'),
-            # torch.nn.ReLU(),
+            torch.nn.ReLU(),
             (torch_geometric.nn.GCNConv(in_channels=c*1, out_channels=c*2, aggr=aggregation), 'x, edge_index -> x'),
-            # torch.nn.ReLU(),
-            # (torch_geometric.nn.GCNConv(in_channels=c*2, out_channels=c*4, aggr=aggregation), 'x, edge_index -> x'),
+            torch.nn.ReLU(),
+            (torch_geometric.nn.GCNConv(in_channels=c*2, out_channels=c*4, aggr=aggregation), 'x, edge_index -> x'),
         ])
+
+        self.linear = torch.nn.Linear(in_features=c*4, out_features=1)
     
     def forward(self, x, edge_index):
         # Predict node embeddings with shape (total number of nodes across batch, number of node features).
         x = self.convolution(x, edge_index)
 
+        # Average node features for each pair of nodes with resulting shape (number of edges, number of node features).
+        x = (x[edge_index[0, :], :] + x[edge_index[1, :], :])
+        # Combine node features for duplicate edges to reduce the shape to (half the original number of edges, ...).
+        x = x[:x.size(0)//2, :] + x[x.size(0)//2:, :]
+        # Predict values for each edge.
+        x = self.linear(x)
+
+        # # Predict edge values with shape (number of edges across batch,).
+        # x = torch.sum(
+        #     x,
+        #     dim=-1,
+        # )
+
+        # Average each pair of edges that represent the same strut (for example, (1, 2) and (2, 1)) with shape (half the original number of edges, 1). The second dimension is included for compatibility with the labels used during training.
+        # x = torch.mean(x.view([2, x.size(0)//2]), dim=0)[:, None]
+        # x = torch.mean(x.view([2, x.size(-1)//2]), dim=0)[:, None]
+
+        # Constrain output values to [0, 1].
+        # x = torch.sigmoid(x)
+
+        return x
+
+class Gnn0(torch.nn.Module):
+    """GNN without learnable parameters that does a simple averaging of adjacent nodes to calculate strut diameters.."""
+
+    def __init__(self, device: str=None) -> None:
+        super().__init__()
+
+        self.convolution = torch_geometric.nn.GCNConv(1, 1)
+
+    def forward(self, x, edge_index):
         # Predict edge values with shape (number of edges across batch,).
         x = torch.sum(
             (x[edge_index[0, :], :] + x[edge_index[1, :], :]) / 2,
@@ -180,9 +213,6 @@ class Gnn(torch.nn.Module):
         )
         # Average each pair of edges that represent the same strut (for example, (1, 2) and (2, 1)) with shape (half the original number of edges, 1). The second dimension is included for compatibility with the labels used during training.
         x = torch.mean(x.view([2, x.size(-1)//2]), dim=0)[:, None]
-
-        # Constrain output values to [0, 1].
-        x = torch.sigmoid(x)
 
         return x
     
