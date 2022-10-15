@@ -258,12 +258,12 @@ if __name__ == "__main__":
     # lattice = convert_vector_to_lattice(vector[1000, :])
     # visualize_lattice(*lattice)
 
-    # inputs = read_pickle('Training_Data_10/inputs.pickle')
-    # visualize_input(inputs[2, 0, ...], 1)
+    inputs = read_pickle('Training_Data_10/inputs.pickle')
+    visualize_input(inputs[0, 0, ...], 1)
 
-    graphs = read_pickle('Training_Data_10/graphs.pickle')
-    lattice = convert_graph_to_lattice(graphs[0])
-    visualize_lattice(*lattice)
+    # graphs = read_pickle('Training_Data_10/graphs.pickle')
+    # lattice = convert_graph_to_lattice(graphs[0])
+    # visualize_lattice(*lattice)
     
     # with open("Training_Data_10/inputs.pickle", 'rb') as f:
     #     array = pickle.load(f)

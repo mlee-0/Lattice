@@ -11,10 +11,11 @@ else:
 
 import os
 import pickle
+import random
 import time
 
 import torch
-import torch_geometric
+# import torch_geometric
 
 from preprocessing import read_pickle
 
@@ -72,28 +73,28 @@ class VectorDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         return self.inputs[index, ...], self.outputs[index, ...]
 
-class GraphDataset(torch_geometric.data.Dataset):
-    def __init__(self, count: int=None) -> None:
-        with open(os.path.join(DATASET_FOLDER, 'graphs.pickle'), 'rb') as f:
-            self.dataset = pickle.load(f)
+# class GraphDataset(torch_geometric.data.Dataset):
+#     def __init__(self, count: int=None) -> None:
+#         with open(os.path.join(DATASET_FOLDER, 'graphs.pickle'), 'rb') as f:
+#             self.dataset = pickle.load(f)
         
-        if count is not None:
-            self.dataset = self.dataset[:count]
+#         if count is not None:
+#             self.dataset = self.dataset[:count]
         
-        # Normalize input data to have zero mean and unit variance.
-        inputs = torch.cat([graph.x.flatten() for graph in self.dataset])
-        mean, std = inputs.mean(), inputs.std()
-        for graph in self.dataset:
-            graph.x = graph.x[:, :1]  # Remove coordinate information
-            # graph.x -= mean
-            # graph.x /= std
+#         # Normalize input data to have zero mean and unit variance.
+#         inputs = torch.cat([graph.x.flatten() for graph in self.dataset])
+#         mean, std = inputs.mean(), inputs.std()
+#         for graph in self.dataset:
+#             graph.x = graph.x[:, :1]  # Remove coordinate information
+#             # graph.x -= mean
+#             # graph.x /= std
 
-    def __len__(self) -> int:
-        return len(self.dataset)
+#     def __len__(self) -> int:
+#         return len(self.dataset)
 
-    def __getitem__(self, index):
-        # Return the entire graph. Returning individual attributes (x, edge_index, y) results in incorrect batching.
-        return self.dataset[index]
+#     def __getitem__(self, index):
+#         # Return the entire graph. Returning individual attributes (x, edge_index, y) results in incorrect batching.
+#         return self.dataset[index]
 
 class LocalDataset(torch.utils.data.Dataset):
     """Stores individual strut diameters and the corresponding 3D density arrays and 3D binary array containing the location of the node locations."""
@@ -115,7 +116,7 @@ class LocalDataset(torch.utils.data.Dataset):
         self.inputs /= self.inputs.std()
 
         # Create binary arrays containing node locations.
-        indices = torch.empty((5, 2*n))
+        indices = torch.zeros((5, 2*n))
         for j, (i, (x1, y1, z1), (x2, y2, z2), d) in enumerate(self.outputs):
             indices[:, j*2] = torch.tensor([j, 0, x1, y1, z1])
             indices[:, j*2+1] = torch.tensor([j, 0, x2, y2, z2])
@@ -139,8 +140,13 @@ class LocalDataset(torch.utils.data.Dataset):
         validate_size = int(validate_split * len(self.inputs))
         test_size = int(test_split * len(self.inputs))
 
-        train_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in image_indices[:train_size]]
-        validate_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in image_indices[train_size:train_size+validate_size]]
-        test_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in image_indices[-test_size:]]
+        # # Only use struts whose indices are multiples of this number. Intended to reduce the dataset size.
+        # use_every_other = 10
+        # Probability of including any particular strut in the dataset.
+        p = 0.1
+
+        train_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if random.random() < p and image_index in image_indices[:train_size]]
+        validate_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if random.random() < p and image_index in image_indices[train_size:train_size+validate_size]]
+        test_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if random.random() < p and image_index in image_indices[-test_size:]]
 
         return train_indices, validate_indices, test_indices

@@ -1,4 +1,3 @@
-import copy
 import os
 from queue import Queue
 import time
@@ -9,7 +8,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import Dataset, Subset, DataLoader
-import torch_geometric
+# import torch_geometric
 
 from datasets import *
 import metrics
@@ -109,15 +108,15 @@ def train_all(
         loss = 0
 
         for batch, data in enumerate(train_dataloader, 1):
-            if isinstance(dataset, torch_geometric.data.Dataset):
-                input_data = data.x.to(device)
-                edge_index = data.edge_index.to(device).type(torch.int64)
-                label_data = data.y.to(device)
-                output_data = model(input_data, edge_index)
-            else:
-                input_data = data[0].to(device)
-                label_data = data[1].to(device)
-                output_data = model(input_data)
+            # if isinstance(dataset, torch_geometric.data.Dataset):
+            #     input_data = data.x.to(device)
+            #     edge_index = data.edge_index.to(device).type(torch.int64)
+            #     label_data = data.y.to(device)
+            #     output_data = model(input_data, edge_index)
+            # else:
+            input_data = data[0].to(device)
+            label_data = data[1].to(device)
+            output_data = model(input_data)
             # Calculate the loss.
             loss_current = loss_function(output_data, label_data)
             loss += loss_current.item()
@@ -165,15 +164,15 @@ def train_all(
         labels = []
         with torch.no_grad():
             for batch, data in enumerate(validate_dataloader, 1):
-                if isinstance(dataset, torch_geometric.data.Dataset):
-                    input_data = data.x.to(device)
-                    edge_index = data.edge_index.to(device).type(torch.int64)
-                    label_data = data.y.to(device)
-                    output_data = model(input_data, edge_index)
-                else:
-                    input_data = data[0].to(device)
-                    label_data = data[1].to(device)
-                    output_data = model(input_data)
+                # if isinstance(dataset, torch_geometric.data.Dataset):
+                #     input_data = data.x.to(device)
+                #     edge_index = data.edge_index.to(device).type(torch.int64)
+                #     label_data = data.y.to(device)
+                #     output_data = model(input_data, edge_index)
+                # else:
+                input_data = data[0].to(device)
+                label_data = data[1].to(device)
+                output_data = model(input_data)
                 loss += loss_function(output_data, label_data).item()
 
                 # Convert to NumPy arrays for evaluation metric calculations.
@@ -271,15 +270,15 @@ def test_all(
 
     with torch.no_grad():
         for batch, data in enumerate(test_dataloader, 1):
-            if isinstance(dataset, torch_geometric.data.Dataset):
-                input_data = data.x.to(device)
-                edge_index = data.edge_index.to(device).type(torch.int64)
-                label_data = data.y.to(device)
-                output_data = model(input_data, edge_index)
-            else:
-                input_data = data[0].to(device)
-                label_data = data[1].to(device)
-                output_data = model(input_data)
+            # if isinstance(dataset, torch_geometric.data.Dataset):
+            #     input_data = data.x.to(device)
+            #     edge_index = data.edge_index.to(device).type(torch.int64)
+            #     label_data = data.y.to(device)
+            #     output_data = model(input_data, edge_index)
+            # else:
+            input_data = data[0].to(device)
+            label_data = data[1].to(device)
+            output_data = model(input_data)
             loss += loss_function(output_data, label_data).item()
 
             # Convert to NumPy arrays for evaluation metric calculations.
@@ -376,7 +375,7 @@ def main(
         "info_metrics": {},
     } if queue else None
     
-    filepath_model = os.path.join('.', filename_model)
+    filepath_model = os.path.join(DATASET_FOLDER, filename_model)
 
     if (test and not train) or (train and train_existing):
         checkpoint = load_model(filepath=filepath_model, device=device)
@@ -388,24 +387,25 @@ def main(
         checkpoint = None
 
     # Split the dataset into training, validation, and testing datasets.
-    sample_size = len(dataset)
     train_indices, validate_indices, test_indices = dataset.split_by_input(*training_split)
     train_dataset = Subset(dataset, train_indices)
     validate_dataset = Subset(dataset, validate_indices)
     test_dataset = Subset(dataset, test_indices)
     train_size, validate_size, test_size = len(train_dataset), len(validate_dataset), len(test_dataset)
+    # sample_size = len(dataset)
     # train_size, validate_size, test_size = [int(split * sample_size) for split in training_split]
     # train_dataset, validate_dataset, test_dataset = torch.utils.data.random_split(
     #     dataset,
     #     [train_size, validate_size, test_size],
     #     generator=torch.Generator().manual_seed(42),
     # )
+    sample_size = sum([train_size, validate_size, test_size])
     print(f"Split {sample_size:,} samples into {train_size:,} training / {validate_size:,} validation / {test_size:,} testing.")
 
     batch_size_train, batch_size_validate, batch_size_test = batch_sizes
-    train_dataloader = torch_geometric.loader.DataLoader(train_dataset, batch_size=batch_size_train, shuffle=True)
-    validate_dataloader = torch_geometric.loader.DataLoader(validate_dataset, batch_size=batch_size_validate, shuffle=True)
-    test_dataloader = torch_geometric.loader.DataLoader(test_dataset, batch_size=batch_size_test, shuffle=False)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size_train, shuffle=True)
+    validate_dataloader = DataLoader(validate_dataset, batch_size=batch_size_validate, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size_test, shuffle=False)
 
     # Initialize the model, optimizer, and loss function.
     model = Model(device)
@@ -482,11 +482,11 @@ def main(
         # graph.edge_attr = outputs[:i, :]
         # graph.y = graph.y[:i, :]
 
-        i = 3
+        # i = 3
 
-        # Histogram of predicted values.
-        plt.hist(outputs[i], bins=20)
-        plt.show()
+        # # Histogram of predicted values.
+        # plt.hist(outputs[i], bins=20)
+        # plt.show()
 
         # graph = test_dataset[i]
         # graph.edge_attr = outputs[i]
@@ -497,7 +497,7 @@ def main(
         
         # lattice = convert_adjacency_to_lattice(labels[0, ...])
 
-        # metrics.plot_error_by_label(outputs, labels)
+        metrics.plot_error_by_label(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0))
         # lattice = convert_adjacency_to_lattice(outputs[0, ...])
         # visualize_lattice(*lattice, [_.item() for _ in graph.y])
 
@@ -510,15 +510,15 @@ if __name__ == "__main__":
     kwargs = {
         "filename_model": "model.pth",
         "train_existing": not True,
-        "save_model_every": 5,
+        "save_model_every": 1,
 
-        "epoch_count": 10,
+        "epoch_count": 5,
         "learning_rate": 1e-3,
         "decay_learning_rate": not True,
-        "batch_sizes": (32, 64, 64),
+        "batch_sizes": (32, 32, 32),
         "training_split": (0.8, 0.1, 0.1),
         
-        "dataset": LocalDataset(100),
+        "dataset": LocalDataset(1000),
         "Model": ResNetLocal,
         "Optimizer": torch.optim.Adam,
         "Loss": nn.MSELoss,
