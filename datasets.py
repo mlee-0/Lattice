@@ -97,10 +97,16 @@ class VectorDataset(torch.utils.data.Dataset):
 #         return self.dataset[index]
 
 class LocalDataset(torch.utils.data.Dataset):
-    """Stores individual strut diameters and the corresponding 3D density arrays and 3D binary array containing the location of the node locations."""
+    """Stores individual strut diameters and the corresponding 3D density arrays and 3D binary arrays containing node locations."""
 
-    def __init__(self, count: int=None) -> None:
+    def __init__(self, count: int=None, p: float()=1.0) -> None:
+        """
+        `count`: Number of input images to include in the dataset. All struts associated with these images are included.
+        `p`: Probability of including any individual strut in the dataset. For example, if 0.1, approximately 10% of the struts are included.
+        """
+
         super().__init__()
+        self.p = p
 
         self.inputs = read_pickle(os.path.join(DATASET_FOLDER, 'inputs.pickle')).float()
         self.outputs = read_pickle(os.path.join(DATASET_FOLDER, 'outputs_local.pickle'))
@@ -111,24 +117,24 @@ class LocalDataset(torch.utils.data.Dataset):
             self.inputs = self.inputs[:count, ...]
             self.outputs = [_ for _ in self.outputs if _[0] < len(self.inputs)]
         
+        self.diameters = torch.tensor([output[3] for output in self.outputs])[:, None]
+        
         # Normalize input data to have zero mean and unit variance.
         self.inputs -= self.inputs.mean()
         self.inputs /= self.inputs.std()
 
-        # Create binary arrays containing node locations.
-        indices = torch.zeros((5, 2*n))
-        for j, (i, (x1, y1, z1), (x2, y2, z2), d) in enumerate(self.outputs):
-            indices[:, j*2] = torch.tensor([j, 0, x1, y1, z1])
-            indices[:, j*2+1] = torch.tensor([j, 0, x2, y2, z2])
-        self.node_locations = torch.sparse_coo_tensor(indices=indices, values=torch.ones((2*n,)), size=(n, 1, *self.inputs.size()[2:5]))
+        # Add a second channel for storing node locations. Should not be normalized.
+        self.inputs = torch.cat([self.inputs, torch.zeros_like(self.inputs)], dim=1)
 
     def __len__(self) -> int:
         return len(self.outputs)
 
     def __getitem__(self, index):
-        image_index, *_, diameter = self.outputs[index]
-        input = torch.cat([self.inputs[image_index, ...], self.node_locations[index, ...].to_dense()], dim=0)
-        return input, torch.tensor([diameter])
+        image_index, (x1, y1, z1), (x2, y2, z2), diameter = self.outputs[index]
+        self.inputs[image_index, 1, ...] = 0
+        self.inputs[image_index, 1, x1, y1, z1] = 1
+        self.inputs[image_index, 1, x2, y2, z2] = 1
+        return self.inputs[image_index, ...], self.diameters[index, :]
     
     def split_by_input(self, train_split: float=0.8, validate_split: float=0.1, test_split: float=0.1):
         """Return lists of indices for the training/validation/testing datasets, splitting by input image instead of by strut so that the input images in the training set do not appear in the validation or testing sets."""
@@ -140,13 +146,40 @@ class LocalDataset(torch.utils.data.Dataset):
         validate_size = int(validate_split * len(self.inputs))
         test_size = int(test_split * len(self.inputs))
 
-        # # Only use struts whose indices are multiples of this number. Intended to reduce the dataset size.
-        # use_every_other = 10
         # Probability of including any particular strut in the dataset.
         p = 0.1
 
-        train_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if random.random() < p and image_index in image_indices[:train_size]]
-        validate_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if random.random() < p and image_index in image_indices[train_size:train_size+validate_size]]
-        test_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if random.random() < p and image_index in image_indices[-test_size:]]
+        train_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if random.random() < self.p and image_index in image_indices[:train_size]]
+        validate_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if random.random() < self.p and image_index in image_indices[train_size:train_size+validate_size]]
+        test_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if random.random() < self.p and image_index in image_indices[-test_size:]]
 
         return train_indices, validate_indices, test_indices
+
+
+
+# Test efficiencies of different implementations of __getitem__ in LocalDataset
+if __name__ == "__main__":
+    import time
+    # from timeit import timeit
+
+    inputs = torch.ones((100, 1, 11, 11, 11))
+    nodes = torch.sparse_coo_tensor([[0], [0], [0], [0], [0]], [1], (100, 1, 11, 11, 11))
+
+    n = 100000
+
+    tic = time.time()
+    for i in range(n):
+        a = torch.cat([inputs[0, ...], nodes[0, ...].to_dense()], dim=0)
+    toc = time.time()
+    print(toc - tic)
+
+    inputs = torch.zeros((100, 2, 11, 11, 11))
+    diameters = torch.ones([1000])
+
+    tic = time.time()
+    for i in range(n):
+        inputs[0, 1, ...] = 0
+        inputs[0, 1, 0, 0, 0] = 1
+        inputs[0, 1, 10, 10, 10] = 1
+    toc = time.time()
+    print(toc - tic)
