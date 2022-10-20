@@ -175,15 +175,15 @@ class ResNetLocal(torch.nn.Module):
             torch.nn.ReLU(inplace=True),
         )
 
-        self.residual_1 = residual(c*2, c*2)
-        self.convolution_bottleneck_1 = torch.nn.Conv3d(in_channels=c*2, out_channels=c*4, kernel_size=1)
-        self.residual_2 = residual(c*4, c*4)
-        self.convolution_bottleneck_2 = torch.nn.Conv3d(in_channels=c*4, out_channels=c*8, kernel_size=1)
-        self.residual_3 = residual(c*8, c*8)
-        self.convolution_bottleneck_3 = torch.nn.Conv3d(in_channels=c*8, out_channels=c*16, kernel_size=1)
+        self.residual_1 = residual(c*4, c*4)
+        self.convolution_bottleneck_1 = torch.nn.Conv3d(in_channels=c*4, out_channels=c*8, kernel_size=1)
+        self.residual_2 = residual(c*8, c*8)
+        self.convolution_bottleneck_2 = torch.nn.Conv3d(in_channels=c*8, out_channels=c*16, kernel_size=1)
+        self.residual_3 = residual(c*16, c*16)
+        self.convolution_bottleneck_3 = torch.nn.Conv3d(in_channels=c*16, out_channels=c*32, kernel_size=1)
 
         self.global_pooling = torch.nn.AdaptiveAvgPool3d(output_size=(1, 1, 1))
-        self.linear = torch.nn.Linear(in_features=c*16, out_features=1)
+        self.linear = torch.nn.Linear(in_features=c*32, out_features=1)
 
     def forward(self, x):
         batch_size = x.size(0)

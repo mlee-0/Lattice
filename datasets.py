@@ -146,9 +146,6 @@ class LocalDataset(torch.utils.data.Dataset):
         validate_size = int(validate_split * len(self.inputs))
         test_size = int(test_split * len(self.inputs))
 
-        # Probability of including any particular strut in the dataset.
-        p = 0.1
-
         train_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if random.random() < self.p and image_index in image_indices[:train_size]]
         validate_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if random.random() < self.p and image_index in image_indices[train_size:train_size+validate_size]]
         test_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if random.random() < self.p and image_index in image_indices[-test_size:]]
