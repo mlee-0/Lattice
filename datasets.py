@@ -99,7 +99,7 @@ class VectorDataset(torch.utils.data.Dataset):
 class LocalDataset(torch.utils.data.Dataset):
     """Stores individual strut diameters and the corresponding 3D density arrays and 3D binary arrays containing node locations."""
 
-    def __init__(self, count: int=None, p: float()=1.0) -> None:
+    def __init__(self, count: int=None, p: float=1.0) -> None:
         """
         `count`: Number of input images to include in the dataset. All struts associated with these images are included.
         `p`: Probability of including any individual strut in the dataset. For example, if 0.1, approximately 10% of the struts are included.

@@ -190,6 +190,7 @@ class ResNetLocal(torch.nn.Module):
 
         x = self.convolution_1(x)
         x = self.convolution_2(x)
+        x = self.convolution_3(x)
 
         x = torch.relu(x + self.residual_1(x))
         x = self.convolution_bottleneck_1(x)
