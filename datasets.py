@@ -102,7 +102,7 @@ class LocalDataset(torch.utils.data.Dataset):
     def __init__(self, count: int=None, p: float=1.0) -> None:
         """
         `count`: Number of input images to include in the dataset. All struts associated with these images are included.
-        `p`: Probability of including any individual strut in the dataset. For example, if 0.1, approximately 10% of the struts are included.
+        `p`: Proportion of data to include in the dataset. For example, if 0.1, approximately 10% of the data are included.
         """
 
         super().__init__()
@@ -123,7 +123,7 @@ class LocalDataset(torch.utils.data.Dataset):
         self.inputs -= self.inputs.mean()
         self.inputs /= self.inputs.std()
 
-        # Add a second channel for storing node locations. Should not be normalized.
+        # Add a second channel for storing node locations. Values should not be normalized.
         self.inputs = torch.cat([self.inputs, torch.zeros_like(self.inputs)], dim=1)
 
     def __len__(self) -> int:
@@ -134,49 +134,25 @@ class LocalDataset(torch.utils.data.Dataset):
         self.inputs[image_index, 1, ...] = 0
         self.inputs[image_index, 1, x1, y1, z1] = 1
         self.inputs[image_index, 1, x2, y2, z2] = 1
-        return self.inputs[image_index, ...], self.diameters[index, :]
-    
+        return torch.clone(self.inputs[image_index, ...]), torch.clone(self.diameters[index, :])
+
     def split_by_input(self, train_split: float=0.8, validate_split: float=0.1, test_split: float=0.1):
         """Return lists of indices for the training/validation/testing datasets, splitting by input image instead of by strut so that the input images in the training set do not appear in the validation or testing sets."""
 
-        torch.manual_seed(42)
+        random.seed(42)
+        image_indices = list(range(len(self.inputs)))
+        random.shuffle(image_indices)
 
-        image_indices = torch.randperm(len(self.inputs))
         train_size = int(train_split * len(self.inputs))
         validate_size = int(validate_split * len(self.inputs))
         test_size = int(test_split * len(self.inputs))
 
-        train_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if random.random() < self.p and image_index in image_indices[:train_size]]
-        validate_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if random.random() < self.p and image_index in image_indices[train_size:train_size+validate_size]]
-        test_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if random.random() < self.p and image_index in image_indices[-test_size:]]
+        train_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in set(image_indices[:train_size])]
+        validate_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in set(image_indices[train_size:train_size+validate_size])]
+        test_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in set(image_indices[-test_size:])]
+
+        train_indices = random.sample(train_indices, round(self.p * len(train_indices)))
+        validate_indices = random.sample(validate_indices, round(self.p * len(validate_indices)))
+        test_indices = random.sample(test_indices, round(self.p * len(test_indices)))
 
         return train_indices, validate_indices, test_indices
-
-
-
-# Test efficiencies of different implementations of __getitem__ in LocalDataset
-if __name__ == "__main__":
-    import time
-    # from timeit import timeit
-
-    inputs = torch.ones((100, 1, 11, 11, 11))
-    nodes = torch.sparse_coo_tensor([[0], [0], [0], [0], [0]], [1], (100, 1, 11, 11, 11))
-
-    n = 100000
-
-    tic = time.time()
-    for i in range(n):
-        a = torch.cat([inputs[0, ...], nodes[0, ...].to_dense()], dim=0)
-    toc = time.time()
-    print(toc - tic)
-
-    inputs = torch.zeros((100, 2, 11, 11, 11))
-    diameters = torch.ones([1000])
-
-    tic = time.time()
-    for i in range(n):
-        inputs[0, 1, ...] = 0
-        inputs[0, 1, 0, 0, 0] = 1
-        inputs[0, 1, 10, 10, 10] = 1
-    toc = time.time()
-    print(toc - tic)

@@ -435,8 +435,8 @@ def write_pickle(data: Any, path: str) -> None:
 if __name__ == "__main__":
     inputs = read_inputs()
     outputs = read_outputs()
-    # inputs = augment_inputs(inputs)
-    # outputs = augment_outputs(outputs)
+    inputs = augment_inputs(inputs)
+    outputs = augment_outputs(outputs)
     outputs_local = convert_outputs_to_individual_struts(outputs)
     write_pickle(inputs, 'Training_Data_10/inputs.pickle')
     write_pickle(outputs_local, 'Training_Data_10/outputs_local.pickle')

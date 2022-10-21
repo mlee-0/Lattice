@@ -518,7 +518,7 @@ if __name__ == "__main__":
         "batch_sizes": (32, 32, 32),
         "training_split": (0.8, 0.1, 0.1),
         
-        "dataset": LocalDataset(p=0.1),
+        "dataset": LocalDataset(1000, p=0.1),
         "Model": ResNetLocal,
         "Optimizer": torch.optim.Adam,
         "Loss": nn.MSELoss,
