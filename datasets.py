@@ -10,7 +10,6 @@ else:
     DATASET_FOLDER = 'drive/My Drive/Lattice'
 
 import os
-import pickle
 import random
 import time
 

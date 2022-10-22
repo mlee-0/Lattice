@@ -71,7 +71,7 @@ def plot_adjacency(p, y):
 def evaluate(p, y) -> dict:
     results = {
         'MAE': mae(p, y),
-        'MSE': mse(p, y),
+        # 'MSE': mse(p, y),
         # 'MAE among nonzeros': mae_nonzeros(p, y),
         'Minimum error': min_error(p, y),
         'Maximum error': max_error(p, y),

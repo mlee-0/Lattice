@@ -157,49 +157,58 @@ class ResNetLocal(torch.nn.Module):
         input_channels = 2
 
         # Number of output channels in the first layer.
-        c = 2
+        c = 4
 
         self.convolution_1 = torch.nn.Sequential(
-            torch.nn.Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=2, padding=1),
+            torch.nn.Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
             torch.nn.BatchNorm3d(c*1),
             torch.nn.ReLU(inplace=True),
         )
         self.convolution_2 = torch.nn.Sequential(
-            torch.nn.Conv3d(in_channels=c*1, out_channels=c*2, kernel_size=3, stride=2, padding=1),
-            torch.nn.BatchNorm3d(c*2),
+            torch.nn.Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            torch.nn.BatchNorm3d(c*1),
             torch.nn.ReLU(inplace=True),
         )
         self.convolution_3 = torch.nn.Sequential(
-            torch.nn.Conv3d(in_channels=c*2, out_channels=c*4, kernel_size=3, stride=2, padding=1),
-            torch.nn.BatchNorm3d(c*4),
+            torch.nn.Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            torch.nn.BatchNorm3d(c*1),
+            torch.nn.ReLU(inplace=True),
+        )
+        self.convolution_4 = torch.nn.Sequential(
+            torch.nn.Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            torch.nn.BatchNorm3d(c*1),
+            torch.nn.ReLU(inplace=True),
+        )
+        self.convolution_5 = torch.nn.Sequential(
+            torch.nn.Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            torch.nn.BatchNorm3d(c*1),
             torch.nn.ReLU(inplace=True),
         )
 
-        self.residual_1 = residual(c*4, c*4)
-        self.convolution_bottleneck_1 = torch.nn.Conv3d(in_channels=c*4, out_channels=c*8, kernel_size=1)
-        self.residual_2 = residual(c*8, c*8)
-        self.convolution_bottleneck_2 = torch.nn.Conv3d(in_channels=c*8, out_channels=c*16, kernel_size=1)
-        self.residual_3 = residual(c*16, c*16)
-        self.convolution_bottleneck_3 = torch.nn.Conv3d(in_channels=c*16, out_channels=c*32, kernel_size=1)
+        self.residual_1 = residual(c*1, c*1)
+        self.residual_2 = residual(c*1, c*1)
+        self.residual_3 = residual(c*1, c*1)
+        self.residual_4 = residual(c*1, c*1)
+        self.residual_5 = residual(c*1, c*1)
 
         self.global_pooling = torch.nn.AdaptiveAvgPool3d(output_size=(1, 1, 1))
-        self.linear = torch.nn.Linear(in_features=c*32, out_features=1)
+        self.linear = torch.nn.Linear(in_features=c*1, out_features=1)
 
     def forward(self, x):
         batch_size = x.size(0)
 
         x = self.convolution_1(x)
-        x = self.convolution_2(x)
-        x = self.convolution_3(x)
-
         x = torch.relu(x + self.residual_1(x))
-        x = self.convolution_bottleneck_1(x)
+        x = self.convolution_2(x)
         x = torch.relu(x + self.residual_2(x))
-        x = self.convolution_bottleneck_2(x)
+        x = self.convolution_3(x)
         x = torch.relu(x + self.residual_3(x))
-        x = self.convolution_bottleneck_3(x)
+        x = self.convolution_4(x)
+        x = torch.relu(x + self.residual_4(x))
+        x = self.convolution_5(x)
+        x = torch.relu(x + self.residual_5(x))
 
-        x = self.global_pooling(x).squeeze()
+        x = self.global_pooling(x)[:, :, 0, 0, 0]
         x = self.linear(x)
         x = torch.sigmoid(x)
 
@@ -274,17 +283,3 @@ class ResNetLocal(torch.nn.Module):
 #         x = torch.mean(x.view([2, x.size(-1)//2]), dim=0)[:, None]
 
 #         return x
-    
-
-"""
-GNN
-- Aggregation add (default): 2.47e-01, 0.429 MAE
-- Aggregation mean: 2.29e-02, 0.121 MAE
-Use mean from here
-
-- No coordinate information in node feature matrix: 2.34e-02, 0.122 MAE
-- Calculate edge values by averaging features (1 layer): 2.30e-02, 0.121 MAE
-    - With 2 layers: 2.29e-02, 0.121 MAE
-- No relu: 2.19e-02, 0.118 MAE
-- 2 layers, no relu: 2.47e-02, 0.125 MAE
-"""

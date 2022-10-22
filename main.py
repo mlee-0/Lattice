@@ -66,7 +66,7 @@ def load_model(filepath: str, device: str) -> dict:
 def train_all(
     device: str, epoch_count: int, checkpoint: dict, filepath_model: str, save_model_every: int,
     model: nn.Module, optimizer: torch.optim.Optimizer, loss_function: nn.Module,
-    dataset, train_dataloader: DataLoader, validate_dataloader: DataLoader,
+    train_dataloader: DataLoader, validate_dataloader: DataLoader,
     scheduler = None,
     queue=None, queue_to_main=None, info_gui: dict=None,
 ) -> nn.Module:
@@ -107,15 +107,9 @@ def train_all(
         model.train(True)
         loss = 0
 
-        for batch, data in enumerate(train_dataloader, 1):
-            # if isinstance(dataset, torch_geometric.data.Dataset):
-            #     input_data = data.x.to(device)
-            #     edge_index = data.edge_index.to(device).type(torch.int64)
-            #     label_data = data.y.to(device)
-            #     output_data = model(input_data, edge_index)
-            # else:
-            input_data = data[0].to(device)
-            label_data = data[1].to(device)
+        for batch, (input_data, label_data) in enumerate(train_dataloader, 1):
+            input_data = input_data.to(device)
+            label_data = label_data.to(device)
             output_data = model(input_data)
             # Calculate the loss.
             loss_current = loss_function(output_data, label_data)
@@ -163,15 +157,9 @@ def train_all(
         outputs = []
         labels = []
         with torch.no_grad():
-            for batch, data in enumerate(validate_dataloader, 1):
-                # if isinstance(dataset, torch_geometric.data.Dataset):
-                #     input_data = data.x.to(device)
-                #     edge_index = data.edge_index.to(device).type(torch.int64)
-                #     label_data = data.y.to(device)
-                #     output_data = model(input_data, edge_index)
-                # else:
-                input_data = data[0].to(device)
-                label_data = data[1].to(device)
+            for batch, (input_data, label_data) in enumerate(validate_dataloader, 1):
+                input_data = input_data.to(device)
+                label_data = label_data.to(device)
                 output_data = model(input_data)
                 loss += loss_function(output_data, label_data).item()
 
@@ -250,7 +238,7 @@ def train_all(
     return model
 
 def test_all(
-    device: str, model: nn.Module, loss_function: nn.Module, dataset: Dataset, test_dataloader: DataLoader,
+    device: str, model: nn.Module, loss_function: nn.Module, test_dataloader: DataLoader,
     queue=None, queue_to_main=None, info_gui: dict=None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Test the given model and return its outputs and corresponding labels and inputs."""
@@ -269,15 +257,9 @@ def test_all(
     labels = []
 
     with torch.no_grad():
-        for batch, data in enumerate(test_dataloader, 1):
-            # if isinstance(dataset, torch_geometric.data.Dataset):
-            #     input_data = data.x.to(device)
-            #     edge_index = data.edge_index.to(device).type(torch.int64)
-            #     label_data = data.y.to(device)
-            #     output_data = model(input_data, edge_index)
-            # else:
-            input_data = data[0].to(device)
-            label_data = data[1].to(device)
+        for batch, (input_data, label_data) in enumerate(test_dataloader, 1):
+            input_data = input_data.to(device)
+            label_data = label_data.to(device)
             output_data = model(input_data)
             loss += loss_function(output_data, label_data).item()
 
@@ -445,7 +427,6 @@ def main(
             model = model,
             optimizer = optimizer,
             loss_function = loss_function,
-            dataset = dataset,
             train_dataloader = train_dataloader,
             validate_dataloader = validate_dataloader,
             scheduler = scheduler,
@@ -459,7 +440,6 @@ def main(
             device = device,
             model = model,
             loss_function = loss_function,
-            dataset = dataset,
             test_dataloader = test_dataloader,
             queue = queue,
             queue_to_main = queue_to_main,
@@ -468,7 +448,7 @@ def main(
 
         if evaluate:
             results = evaluate_regression(outputs, labels, inputs, dataset, queue=queue, info_gui=info_gui)
-        
+
         # plt.figure()
         # plt.subplot(1, 2, 1)
         # plt.imshow(outputs[0, 500:1000, :], cmap='gray')
@@ -529,3 +509,17 @@ if __name__ == "__main__":
     }
 
     main(**kwargs)
+
+"""
+Local diameter prediction
+
+3 conv, stride 1: 0.035 MAE
+4 conv, stride 1: 0.028 MAE (saw large loss spike in epoch 3, but went back down)
+5 conv, stride 1: 0.027 MAE (saw large loss spike in epoch 2, but went back down)
+6 conv, stride 1: 0.043 MAE (trial 1; loss in epoch 5 noticeably higher than previous epochs)
+6 conv, stride 1: 0.029 MAE (trial 2; relatively stable loss)
+
+3 conv/residual: 0.026 MAE
+5 conv/resiudal: 0.029 MAE (slight increase in loss in epoch 5)
+3 conv + 3 residual (conv then res): 
+"""
