@@ -12,7 +12,7 @@ from PIL import Image
 import torch
 # import torch_geometric
 
-from datasets import DATASET_FOLDER
+from main import DATASET_FOLDER
 
 
 # Size of input images (height, width, depth). Images are stacked along the depth dimension.

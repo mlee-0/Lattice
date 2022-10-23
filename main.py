@@ -1,3 +1,12 @@
+try:
+    from google.colab import drive  # type: ignore
+except ImportError:
+    DATASET_FOLDER = 'Training_Data_10'
+else:
+    drive.mount('/content/drive')
+    DATASET_FOLDER = 'drive/My Drive/Lattice'
+
+
 import os
 from queue import Queue
 import time
@@ -498,7 +507,7 @@ if __name__ == "__main__":
         "batch_sizes": (32, 32, 32),
         "training_split": (0.8, 0.1, 0.1),
         
-        "dataset": LocalDataset(1000, p=0.1),
+        "dataset": LocalDataset(4000, p=0.1/4),
         "Model": ResNetLocal,
         "Optimizer": torch.optim.Adam,
         "Loss": nn.MSELoss,
@@ -509,17 +518,3 @@ if __name__ == "__main__":
     }
 
     main(**kwargs)
-
-"""
-Local diameter prediction
-
-3 conv, stride 1: 0.035 MAE
-4 conv, stride 1: 0.028 MAE (saw large loss spike in epoch 3, but went back down)
-5 conv, stride 1: 0.027 MAE (saw large loss spike in epoch 2, but went back down)
-6 conv, stride 1: 0.043 MAE (trial 1; loss in epoch 5 noticeably higher than previous epochs)
-6 conv, stride 1: 0.029 MAE (trial 2; relatively stable loss)
-
-3 conv/residual: 0.026 MAE
-5 conv/resiudal: 0.029 MAE (slight increase in loss in epoch 5)
-3 conv + 3 residual (conv then res): 
-"""

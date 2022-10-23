@@ -1,14 +1,6 @@
 """Dataset classes that load previously cached dataset files."""
 
 
-try:
-    from google.colab import drive  # type: ignore
-except ImportError:
-    DATASET_FOLDER = 'Training_Data_10'
-else:
-    drive.mount('/content/drive')
-    DATASET_FOLDER = 'drive/My Drive/Lattice'
-
 import os
 import random
 import time
@@ -16,6 +8,7 @@ import time
 import torch
 # import torch_geometric
 
+from main import DATASET_FOLDER
 from preprocessing import read_pickle
 
 
@@ -114,7 +107,7 @@ class LocalDataset(torch.utils.data.Dataset):
 
         if count is not None:
             self.inputs = self.inputs[:count, ...]
-            self.outputs = [_ for _ in self.outputs if _[0] < len(self.inputs)]
+            self.outputs = [_ for _ in self.outputs if _[0] < count]
         
         self.diameters = torch.tensor([output[3] for output in self.outputs])[:, None]
         
@@ -146,9 +139,15 @@ class LocalDataset(torch.utils.data.Dataset):
         validate_size = int(validate_split * len(self.inputs))
         test_size = int(test_split * len(self.inputs))
 
-        train_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in set(image_indices[:train_size])]
-        validate_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in set(image_indices[train_size:train_size+validate_size])]
-        test_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in set(image_indices[-test_size:])]
+        # Input image indices for each set.
+        train_image_indices = set(image_indices[:train_size])
+        validate_image_indices = set(image_indices[train_size:train_size+validate_size])
+        test_image_indices = set(image_indices[-test_size:])
+
+        # Strut indices for each set.
+        train_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in train_image_indices]
+        validate_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in validate_image_indices]
+        test_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in test_image_indices]
 
         train_indices = random.sample(train_indices, round(self.p * len(train_indices)))
         validate_indices = random.sample(validate_indices, round(self.p * len(validate_indices)))
