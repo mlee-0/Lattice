@@ -9,6 +9,7 @@ else:
 
 import os
 from queue import Queue
+import random
 import time
 from typing import List, Tuple
 
@@ -23,6 +24,9 @@ from datasets import *
 import metrics
 from models import *
 from visualization import *
+
+
+random.seed(42)
 
 
 def plot_loss(figure, epochs: list, loss: List[list], labels: List[str], start_epoch: int = None) -> None:
@@ -60,7 +64,7 @@ def plot_loss(figure, epochs: list, loss: List[list], labels: List[str], start_e
 def save_model(filepath: str, **kwargs) -> None:
     """Save model parameters to a file."""
     torch.save(kwargs, filepath)
-    print(f"Saved model parameters to {filepath}.")
+    print(f"Saved model to {filepath}.")
 
 def load_model(filepath: str, device: str) -> dict:
     """Return a dictionary of model parameters from a file."""
@@ -72,7 +76,7 @@ def load_model(filepath: str, device: str) -> dict:
         print(f"Loaded model from {filepath} trained for {checkpoint['epoch']} epochs.")
         return checkpoint
 
-def train_all(
+def train(
     device: str, epoch_count: int, checkpoint: dict, filepath_model: str, save_model_every: int,
     model: nn.Module, optimizer: torch.optim.Optimizer, loss_function: nn.Module,
     train_dataloader: DataLoader, validate_dataloader: DataLoader,
@@ -246,7 +250,7 @@ def train_all(
     
     return model
 
-def test_all(
+def test(
     device: str, model: nn.Module, loss_function: nn.Module, test_dataloader: DataLoader,
     queue=None, queue_to_main=None, info_gui: dict=None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -281,7 +285,7 @@ def test_all(
             labels.append(label_data)
             outputs.append(output_data)
             
-            if batch % 1 == 0:
+            if batch % 10 == 0:
                 print(f"Batch {batch}/{len(test_dataloader)}...", end="\r")
                 if queue:
                     info_gui["progress_batch"] = (batch, len(test_dataloader))
@@ -306,7 +310,7 @@ def test_all(
 
     return outputs, labels, inputs
 
-def evaluate_regression(outputs: List[np.ndarray], labels: List[np.ndarray], inputs: List[np.ndarray], dataset: Dataset, queue=None, info_gui: dict=None):
+def evaluate(outputs: List[np.ndarray], labels: List[np.ndarray], inputs: List[np.ndarray], dataset: Dataset, queue=None, info_gui: dict=None):
     """Calculate and return evaluation metrics."""
 
     # Concatenate results from all batches into a single array.
@@ -327,9 +331,9 @@ def evaluate_regression(outputs: List[np.ndarray], labels: List[np.ndarray], inp
 
 
 def main(
-    epoch_count: int, learning_rate: float, decay_learning_rate: bool, batch_sizes: Tuple[int, int, int], training_split: Tuple[float, float, float], dataset: Dataset, Model: nn.Module,
+    epoch_count: int, learning_rate: float, decay_learning_rate: bool, batch_sizes: Tuple[int, int, int], data_split: Tuple[float, float, float], dataset: Dataset, Model: nn.Module,
     filename_model: str, train_existing: bool, save_model_every: int,
-    train: bool, test: bool, evaluate: bool,
+    train_model: bool, test_model: bool, visualize_results: bool,
     Optimizer: torch.optim.Optimizer = torch.optim.SGD, Loss: nn.Module = nn.MSELoss,
     queue: Queue = None, queue_to_main: Queue = None,
 ):
@@ -337,15 +341,15 @@ def main(
     Function run directly by this file and by the GUI.
 
     Parameters:
-    `train`: Train the model.
-    `test`: Test the model.
-    `evaluate`: Evaluate the test results, if testing.
+    `train_model`: Train the model.
+    `test_model`: Test the model.
+    `visualize_results`: Show plots or visualizations.
     `train_existing`: Load a previously saved model and continue training it.
 
     `epoch_count`: Number of epochs to train.
     `learning_rate`: Learning rate for the optimizer.
     `batch_sizes`: Tuple of batch sizes for the training, validation, and testing datasets.
-    `training_split`: A tuple of three floats in [0, 1] of the training, validation, and testing ratios.
+    `data_split`: Tuple of three floats in [0, 1] of the relative training, validation, and testing dataset sizes.
     `dataset`: The Dataset to train on.
     `filename_model`: Name of the .pth file to load and save to during training.
     `Model`: A Module subclass to instantiate, not an instance of the class.
@@ -368,7 +372,7 @@ def main(
     
     filepath_model = os.path.join(DATASET_FOLDER, filename_model)
 
-    if (test and not train) or (train and train_existing):
+    if (test_model and not train_model) or (train_model and train_existing):
         checkpoint = load_model(filepath=filepath_model, device=device)
         # Load the last learning rate used.
         if checkpoint and decay_learning_rate:
@@ -377,14 +381,18 @@ def main(
     else:
         checkpoint = None
 
-    # Split the dataset into training, validation, and testing datasets.
-    train_indices, validate_indices, test_indices = dataset.split_by_input(*training_split)
+    # Split the dataset into training, validation, and testing datasets. If using the individual strut diameters dataset, split by input image instead of by struts to ensure that data from input images in the training set do not appear in the validation or testing sets.
+    train_image_indices, validate_image_indices, test_image_indices = dataset.split_inputs(*data_split)
+    train_indices = dataset.get_indices_for_images(train_image_indices)
+    validate_indices = dataset.get_indices_for_images(validate_image_indices)
+    test_indices = dataset.get_indices_for_images(test_image_indices)
+
     train_dataset = Subset(dataset, train_indices)
     validate_dataset = Subset(dataset, validate_indices)
     test_dataset = Subset(dataset, test_indices)
     train_size, validate_size, test_size = len(train_dataset), len(validate_dataset), len(test_dataset)
     # sample_size = len(dataset)
-    # train_size, validate_size, test_size = [int(split * sample_size) for split in training_split]
+    # train_size, validate_size, test_size = [int(split * sample_size) for split in data_split]
     # train_dataset, validate_dataset, test_dataset = torch.utils.data.random_split(
     #     dataset,
     #     [train_size, validate_size, test_size],
@@ -426,8 +434,8 @@ def main(
         info_gui["info_training"]["Learning Rate"] = learning_rate
         queue.put(info_gui)
 
-    if train:
-        model = train_all(
+    if train_model:
+        model = train(
             device = device,
             epoch_count = epoch_count,
             checkpoint = checkpoint,
@@ -444,8 +452,8 @@ def main(
             info_gui = info_gui,
             )
     
-    if test:
-        outputs, labels, inputs = test_all(
+    if test_model:
+        outputs, labels, inputs = test(
             device = device,
             model = model,
             loss_function = loss_function,
@@ -455,44 +463,64 @@ def main(
             info_gui = info_gui,
         )
 
-        if evaluate:
-            results = evaluate_regression(outputs, labels, inputs, dataset, queue=queue, info_gui=info_gui)
+        results = evaluate(outputs, labels, inputs, dataset, queue=queue, info_gui=info_gui)
 
-        # plt.figure()
-        # plt.subplot(1, 2, 1)
-        # plt.imshow(outputs[0, 500:1000, :], cmap='gray')
-        # plt.subplot(1, 2, 2)
-        # plt.imshow(labels[0, 500:1000, :], cmap='gray')
-        # plt.show()
+        if visualize_results:
+            # Calculate (x, y, z) coordinates of each node.
+            locations_1 = []
+            locations_2 = []
+            for input_ in inputs:
+                for i in range(input_.shape[0]):
+                    coordinates = np.argwhere(input_[i, 1, ...])
+                    assert coordinates.shape[0] == 2
+                    locations_1.append(tuple(coordinates[0, :]))
+                    locations_2.append(tuple(coordinates[1, :]))
+
+            metrics.plot_histograms(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0), bins=20)
+            metrics.plot_error_by_true(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0))
+            metrics.plot_error_by_edge_proximity(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0), locations_1, locations_2)
+
+            # If predicting local strut diameters, visualize the predictions on a single lattice structure.
+            indices = dataset.get_indices_for_images([test_image_indices[0]])
+            loader = DataLoader(Subset(dataset, indices), batch_size=1, shuffle=False)
+            outputs, labels, inputs = test(
+                device = device,
+                model = model,
+                loss_function = loss_function,
+                test_dataloader = loader,
+                queue = queue,
+                queue_to_main = queue_to_main,
+                info_gui = info_gui,
+            )
+
+            # Calculate (x, y, z) coordinates of each node.
+            locations_1 = []
+            locations_2 = []
+            for input_ in inputs:
+                coordinates = np.argwhere(input_[0, 1, ...])
+                assert coordinates.shape[0] == 2
+                locations_1.append(tuple(coordinates[0, :]))
+                locations_2.append(tuple(coordinates[1, :]))
+
+            visualize_lattice(locations_1, locations_2, outputs, true_diameters=labels)
 
 
-        # graph = copy.deepcopy(test_dataset[0])
-        # i = 1527
-        # graph.edge_attr = outputs[:i, :]
-        # graph.y = graph.y[:i, :]
+            # graph = copy.deepcopy(test_dataset[0])
+            # i = 1527
+            # graph.edge_attr = outputs[:i, :]
+            # graph.y = graph.y[:i, :]
 
-        # i = 3
+            # i = 3
 
-        # # Histogram of predicted values.
-        # plt.hist(outputs[i], bins=20)
-        # plt.show()
+            # # Histogram of predicted values.
+            # plt.hist(outputs[i], bins=20)
+            # plt.show()
 
-        # graph = test_dataset[i]
-        # graph.edge_attr = outputs[i]
-        # graph.y = labels[i]
-        # lattice = convert_graph_to_lattice(graph)
-        
-        # lattice = convert_vector_to_lattice(outputs[0, ...])
-        
-        # lattice = convert_adjacency_to_lattice(labels[0, ...])
-
-        metrics.plot_error_by_label(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0))
-        # lattice = convert_adjacency_to_lattice(outputs[0, ...])
-        # visualize_lattice(*lattice, [_.item() for _ in graph.y])
-
-        # h = 0
-        # for i in range(5):
-        #     metrics.plot_adjacency(outputs[i, h:h+500, :], labels[i, h:h+500, :])
+            # graph = test_dataset[i]
+            # graph.edge_attr = outputs[i]
+            # graph.y = labels[i]
+            # lattice = convert_graph_to_lattice(graph)
+            # visualize_lattice(*lattice, [_.item() for _ in graph.y])
 
 
 if __name__ == "__main__":
@@ -505,16 +533,16 @@ if __name__ == "__main__":
         "learning_rate": 1e-3,
         "decay_learning_rate": not True,
         "batch_sizes": (32, 32, 32),
-        "training_split": (0.8, 0.1, 0.1),
+        "data_split": (0.8, 0.1, 0.1),
         
-        "dataset": LocalDataset(4000, p=0.1/4),
+        "dataset": LocalDataset(1000, p=0.1),
         "Model": ResNetLocal,
         "Optimizer": torch.optim.Adam,
         "Loss": nn.MSELoss,
         
-        "train": True,
-        "test": True,
-        "evaluate": True,
+        "train_model": not True,
+        "test_model": True,
+        "visualize_results": True,
     }
 
     main(**kwargs)

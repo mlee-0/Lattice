@@ -2,6 +2,7 @@ from typing import Tuple
 
 import numpy as np
 import torch
+from torch.nn import *
 # import torch_geometric
 
 
@@ -212,6 +213,49 @@ class ResNetLocal(torch.nn.Module):
         x = self.linear(x)
         x = torch.sigmoid(x)
 
+        return x
+
+class Inception(torch.nn.Module):
+    def __init__(self, device: str='cpu') -> None:
+        super().__init__()
+
+        input_channels = 2
+
+        # Number of output channels in the first layer.
+        c = 4
+
+        self.convolution_1 = Sequential(
+            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=1, stride=1, padding='same'),
+            BatchNorm3d(c*1),
+            ReLU(inplace=True),
+        )
+        self.convolution_3 = Sequential(
+            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*1),
+            ReLU(),
+        )
+        self.convolution_5 = Sequential(
+            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=5, stride=1, padding='same'),
+            BatchNorm3d(c*1),
+            ReLU(),
+        )
+        # self.convolution_7 = Sequential(
+        #     Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=7, stride=1, padding='same'),
+        #     ReLU(),
+        # )
+
+        self.pooling = AvgPool3d((1, 1, 1))
+        self.linear = Linear(in_features=(c*1)*3, out_features=1)
+
+    def forward(self, x):
+        x = torch.cat([
+            self.convolution_1(x),
+            self.convolution_3(x),
+            self.convolution_5(x),
+            # self.convolution_7(x),
+        ], dim=1)
+        x = self.pooling(x)[..., 0, 0, 0]
+        x = self.linear(x)
         return x
 
 # class Gnn(torch.nn.Module):

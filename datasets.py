@@ -4,6 +4,7 @@
 import os
 import random
 import time
+from typing import List, Tuple, Union
 
 import torch
 # import torch_geometric
@@ -13,6 +14,8 @@ from preprocessing import read_pickle
 
 
 class AdjacencyDataset(torch.utils.data.Dataset):
+    """Density data as 3D tensors and strut diameter data as 2D tensors resembling adjacency matrices."""
+
     def __init__(self, count: int=None) -> None:
         """
         `count`: The number of data to use, or None to use the entire dataset.
@@ -43,6 +46,8 @@ class AdjacencyDataset(torch.utils.data.Dataset):
         return self.inputs[index, ...], self.outputs[index, ...]
 
 class VectorDataset(torch.utils.data.Dataset):
+    """Density data as 3D tensors and strut diameter data as 1D tensors."""
+
     def __init__(self, count: int=None) -> None:
         super().__init__()
 
@@ -66,6 +71,8 @@ class VectorDataset(torch.utils.data.Dataset):
         return self.inputs[index, ...], self.outputs[index, ...]
 
 # class GraphDataset(torch_geometric.data.Dataset):
+#     """Density data and strut diameter data as graphs."""
+
 #     def __init__(self, count: int=None) -> None:
 #         with open(os.path.join(DATASET_FOLDER, 'graphs.pickle'), 'rb') as f:
 #             self.dataset = pickle.load(f)
@@ -89,7 +96,7 @@ class VectorDataset(torch.utils.data.Dataset):
 #         return self.dataset[index]
 
 class LocalDataset(torch.utils.data.Dataset):
-    """Stores individual strut diameters and the corresponding 3D density arrays and 3D binary arrays containing node locations."""
+    """Density and node location data as 2-channel 3D tensors and strut diameter data as scalars. The node location channel is a binary array with values {0, 1}."""
 
     def __init__(self, count: int=None, p: float=1.0) -> None:
         """
@@ -102,8 +109,6 @@ class LocalDataset(torch.utils.data.Dataset):
 
         self.inputs = read_pickle(os.path.join(DATASET_FOLDER, 'inputs.pickle')).float()
         self.outputs = read_pickle(os.path.join(DATASET_FOLDER, 'outputs_local.pickle'))
-
-        n = len(self.outputs)
 
         if count is not None:
             self.inputs = self.inputs[:count, ...]
@@ -127,30 +132,41 @@ class LocalDataset(torch.utils.data.Dataset):
         self.inputs[image_index, 1, x1, y1, z1] = 1
         self.inputs[image_index, 1, x2, y2, z2] = 1
         return torch.clone(self.inputs[image_index, ...]), torch.clone(self.diameters[index, :])
+    
+    def split_inputs(self, train_split: float=0.8, validate_split: float=0.1, test_split: float=0.1) -> Tuple[list, list, list]:
+        """Return randomly shuffled input image indices for the training/validation/testing datasets."""
 
-    def split_by_input(self, train_split: float=0.8, validate_split: float=0.1, test_split: float=0.1):
-        """Return lists of indices for the training/validation/testing datasets, splitting by input image instead of by strut so that the input images in the training set do not appear in the validation or testing sets."""
-
-        random.seed(42)
-        image_indices = list(range(len(self.inputs)))
+        image_indices = list(range(self.inputs.size(0)))
         random.shuffle(image_indices)
 
         train_size = int(train_split * len(self.inputs))
         validate_size = int(validate_split * len(self.inputs))
         test_size = int(test_split * len(self.inputs))
 
-        # Input image indices for each set.
-        train_image_indices = set(image_indices[:train_size])
-        validate_image_indices = set(image_indices[train_size:train_size+validate_size])
-        test_image_indices = set(image_indices[-test_size:])
+        train_image_indices = image_indices[:train_size]
+        validate_image_indices = image_indices[train_size:train_size+validate_size]
+        test_image_indices = image_indices[-test_size:]
 
-        # Strut indices for each set.
-        train_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in train_image_indices]
-        validate_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in validate_image_indices]
-        test_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in test_image_indices]
+        return train_image_indices, validate_image_indices, test_image_indices
 
-        train_indices = random.sample(train_indices, round(self.p * len(train_indices)))
-        validate_indices = random.sample(validate_indices, round(self.p * len(validate_indices)))
-        test_indices = random.sample(test_indices, round(self.p * len(test_indices)))
+    def get_indices_for_images(self, image_indices: Union[int, List[int]]):
+        """Return indices for data corresponding to the specified image index."""
+        if type(image_indices) is int:
+            image_indices = [image_indices]
+        image_indices = set(image_indices)
+        indices = [i for i, output in enumerate(self.outputs) if output[0] in image_indices]
+        indices = random.sample(indices, round(self.p * len(indices)))
+        return indices
 
-        return train_indices, validate_indices, test_indices
+    # def split_outputs(self, train_image_indices: List[int], validate_image_indices: List[int], test_image_indices: List[int]):
+    #     """Return randomly sampled indices for the training/validation/testing datasets corresponding to the given image indices. Ensures data from input images in the training set do not appear in the validation or testing sets."""
+
+    #     train_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in train_image_indices]
+    #     validate_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in validate_image_indices]
+    #     test_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in test_image_indices]
+
+    #     train_indices = random.sample(train_indices, round(self.p * len(train_indices)))
+    #     validate_indices = random.sample(validate_indices, round(self.p * len(validate_indices)))
+    #     test_indices = random.sample(test_indices, round(self.p * len(test_indices)))
+
+    #     return train_indices, validate_indices, test_indices

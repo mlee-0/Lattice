@@ -65,7 +65,7 @@ def read_struts() -> List[Tuple[int, int]]:
 
     return struts
 
-def read_inputs(count: int=None) -> torch.tensor:
+def read_inputs(count: int=None) -> torch.Tensor:
     """Return input images as a 5D tensor with shape (number of data, 1 channel, height, width, depth)."""
     
     directory = os.path.join(DATASET_FOLDER, 'Input_Data')
@@ -143,7 +143,7 @@ def get_unique_strut_numbers(struts: list) -> list:
     
     return strut_numbers
 
-def apply_mask_inputs(inputs: torch.tensor, outputs: list):
+def apply_mask_inputs(inputs: torch.Tensor, outputs: list):
     """Replace density values outside the predefined volume of space with some constant value."""
 
     struts = read_struts()
@@ -200,7 +200,7 @@ def rotate_array(array: np.ndarray, rotation: tuple, axes: tuple) -> np.ndarray:
 
     return array
 
-def augment_inputs(inputs: torch.tensor, augmentations: int=None) -> np.ndarray:
+def augment_inputs(inputs: torch.Tensor, augmentations: int=None) -> np.ndarray:
     print(f"Augmenting inputs...")
     rotations, axes = cube_rotations(augmentations)
 
@@ -337,7 +337,7 @@ def convert_outputs_to_individual_struts(outputs: list) -> List[Tuple[int, Tuple
     
     return data
 
-# def convert_dataset_to_graph(inputs: torch.tensor, outputs: list): -> List[torch_geometric.data.Data]:
+# def convert_dataset_to_graph(inputs: torch.Tensor, outputs: list): -> List[torch_geometric.data.Data]:
 #     """Convert a 5D array of input data and a list of output data to a list of graphs."""
 
 #     assert inputs.shape[0] == len(outputs), f"Number of inputs {inputs.shape[0]} and number of outputs {len(outputs)} do not match."
@@ -423,7 +423,12 @@ def mask_of_active_nodes(strut_numbers: list, struts: list, node_numbers: np.nda
 def read_pickle(path: str) -> Any:
     with open(path, 'rb') as f:
         data = pickle.load(f)
-    print(f"Loaded {type(data)} with length {len(data)} from {path}.")
+
+    if type(data) is torch.Tensor:
+        print(f"Loaded tensor with size {data.size()} from {path}.")
+    else:
+        print(f"Loaded {type(data)} with length {len(data)} from {path}.")
+
     return data
 
 def write_pickle(data: Any, path: str) -> None:
