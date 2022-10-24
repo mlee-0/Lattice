@@ -58,25 +58,48 @@ def plot_error_by_true(p, y):
     plt.title(f'Errors By True Values ({p.size} data)')
     plt.show()
 
-def plot_error_by_edge_proximity(p, y, locations_1: List[Tuple[int, int, int]], locations_2: List[Tuple[int, int, int]]):
-    """Plot the errors vs. proximities from the edges. Intended to reveal where in the 3D volume predictions are inaccurate."""
+def plot_error_by_edge_distance(p, y, locations_1: List[Tuple[int, int, int]], locations_2: List[Tuple[int, int, int]]):
+    """Plot the errors vs. distances from the edges. Intended to reveal where in the 3D volume predictions are inaccurate."""
 
     p, y = p.flatten(), y.flatten()
     
-    # Calculate the proximity of each node as the perpendicular distance to the nearest edge. Calculate the proximity of each strut as the average of its two nodes' proximities.
+    # Calculate the distance of each node as the perpendicular distance to the nearest edge. Calculate the distance of each strut as the average of its two nodes' distance.
     h = w = d = 11
-    proximity = lambda x, y, z: min([x - 0, (h-1) - x, y - 0, (w-1) - y, z - 0, (d-1) - z])
-    proximities = np.mean([
-        [proximity(x, y, z) for x, y, z in locations_1],
-        [proximity(x, y, z) for x, y, z in locations_2],
+    distance = lambda x, y, z: min([x - 0, (h-1) - x, y - 0, (w-1) - y, z - 0, (d-1) - z])
+    distances = np.mean([
+        [distance(x, y, z) for x, y, z in locations_1],
+        [distance(x, y, z) for x, y, z in locations_2],
     ], axis=0)
 
     plt.figure()
-    plt.plot(proximities, p-y, '.')
+    plt.plot(distances, p-y, '.')
     plt.grid()
-    plt.xlabel('Edge Proximity')
+    plt.xlabel('Edge Distance')
     plt.ylabel('Error')
-    plt.title(f'Errors By Edge Proximity ({p.size} data)')
+    plt.title(f'Errors By Edge Distance ({p.size} data)')
+    plt.show()
+
+def plot_error_by_angle(p, y, locations_1: List[Tuple[int, int, int]], locations_2: List[Tuple[int, int, int]]):
+    """Plot the errors vs. strut angles."""
+    angles = [
+        (1, 0, 0),
+        (0, 1, 0),
+        (0, 0, 1),
+        (1, 1, 0),
+        (0, 1, 1),
+        (1, 0, 1),
+        (1, 1, 1),
+    ]
+    angle_indices = [
+        angles.index((abs(x2 - x1), abs(y2 - y1), abs(z2 - z1)))
+        for (x1,y1,z1), (x2,y2,z2) in zip(locations_1, locations_2)
+    ]
+
+    plt.figure()
+    plt.plot(angle_indices, p-y, '.')
+    plt.xticks(range(len(angles)), labels=[str(_) for _ in angles])
+    plt.ylabel('Error')
+    plt.title(f'Errors By Angle ({p.size} data)')
     plt.show()
 
 def plot_histograms(p, y, bins=20):

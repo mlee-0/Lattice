@@ -478,7 +478,8 @@ def main(
 
             metrics.plot_histograms(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0), bins=20)
             metrics.plot_error_by_true(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0))
-            metrics.plot_error_by_edge_proximity(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0), locations_1, locations_2)
+            metrics.plot_error_by_angle(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0), locations_1, locations_2)
+            metrics.plot_error_by_edge_distance(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0), locations_1, locations_2)
 
             # If predicting local strut diameters, visualize the predictions on a single lattice structure.
             indices = dataset.get_indices_for_images([test_image_indices[0]])
