@@ -1,7 +1,7 @@
 """Evaluation metrics, where `p` are predictions and `y` are labels."""
 
 
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -71,9 +71,16 @@ def plot_error_by_edge_distance(p, y, locations_1: List[Tuple[int, int, int]], l
         [distance(x, y, z) for x, y, z in locations_2],
     ], axis=0)
 
+    error = (p - y).squeeze()
+    unique_distances = np.unique(distances)
+
     plt.figure()
-    plt.plot(distances, p-y, '.')
-    plt.grid()
+    plt.violinplot(
+        [error[distances == d] for d in unique_distances],
+        positions=unique_distances,
+        showmeans=True,
+        showextrema=False,
+    )
     plt.xlabel('Edge Distance')
     plt.ylabel('Error')
     plt.title(f'Errors By Edge Distance ({p.size} data)')
@@ -90,13 +97,21 @@ def plot_error_by_angle(p, y, locations_1: List[Tuple[int, int, int]], locations
         (1, 0, 1),
         (1, 1, 1),
     ]
-    angle_indices = [
+    angle_indices = np.array([
         angles.index((abs(x2 - x1), abs(y2 - y1), abs(z2 - z1)))
         for (x1,y1,z1), (x2,y2,z2) in zip(locations_1, locations_2)
-    ]
+    ])
+
+    error = (p - y).squeeze()
+    unique_angle_indices = np.unique(angle_indices)
 
     plt.figure()
-    plt.plot(angle_indices, p-y, '.')
+    plt.violinplot(
+        [error[angle_indices == i] for i in unique_angle_indices],
+        positions=unique_angle_indices,
+        showmeans=True,
+        showextrema=False,
+    )
     plt.xticks(range(len(angles)), labels=[str(_) for _ in angles])
     plt.ylabel('Error')
     plt.title(f'Errors By Angle ({p.size} data)')
@@ -105,9 +120,10 @@ def plot_error_by_angle(p, y, locations_1: List[Tuple[int, int, int]], locations
 def plot_histograms(p, y, bins=20):
     """Plot the histograms of predictions and true values on a single plot."""
     plt.figure()
-    plt.hist(p, range=(0, 1), bins=bins, alpha=0.5, label='Predicted')
-    plt.hist(y, range=(0, 1), bins=bins, alpha=0.5, label='True')
+    plt.hist(p, range=(0, 1), bins=bins, alpha=0.5, label=f'Predicted (mean {p.mean():.3e})')
+    plt.hist(y, range=(0, 1), bins=bins, alpha=0.5, label=f'True (mean {y.mean():.3e})')
     plt.legend()
+    plt.title('Histogram')
     plt.show()
 
 def plot_adjacency(p, y):
@@ -121,7 +137,7 @@ def plot_adjacency(p, y):
     plt.title('True')
     plt.show()
 
-def evaluate(p, y) -> dict:
+def evaluate(p, y) -> Dict[str, float]:
     results = {
         'MAE': mae(p, y),
         # 'MSE': mse(p, y),

@@ -158,15 +158,10 @@ class LocalDataset(torch.utils.data.Dataset):
         indices = random.sample(indices, round(self.p * len(indices)))
         return indices
 
-    # def split_outputs(self, train_image_indices: List[int], validate_image_indices: List[int], test_image_indices: List[int]):
-    #     """Return randomly sampled indices for the training/validation/testing datasets corresponding to the given image indices. Ensures data from input images in the training set do not appear in the validation or testing sets."""
-
-    #     train_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in train_image_indices]
-    #     validate_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in validate_image_indices]
-    #     test_indices = [i for i, (image_index, *_) in enumerate(self.outputs) if image_index in test_image_indices]
-
-    #     train_indices = random.sample(train_indices, round(self.p * len(train_indices)))
-    #     validate_indices = random.sample(validate_indices, round(self.p * len(validate_indices)))
-    #     test_indices = random.sample(test_indices, round(self.p * len(test_indices)))
-
-    #     return train_indices, validate_indices, test_indices
+if __name__ == '__main__':
+    import matplotlib.pyplot as plt
+    dataset = LocalDataset(1000, p=0.5)
+    print(dataset.diameters.mean())
+    plt.figure()
+    plt.hist(dataset.diameters.squeeze().numpy(), bins=25)
+    plt.show()

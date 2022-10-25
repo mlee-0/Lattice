@@ -481,7 +481,8 @@ def main(
             metrics.plot_error_by_angle(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0), locations_1, locations_2)
             metrics.plot_error_by_edge_distance(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0), locations_1, locations_2)
 
-            # If predicting local strut diameters, visualize the predictions on a single lattice structure.
+            # If predicting local strut diameters, visualize the predictions on all struts in a single lattice structure.
+            dataset.p = 1.0
             indices = dataset.get_indices_for_images([test_image_indices[0]])
             loader = DataLoader(Subset(dataset, indices), batch_size=1, shuffle=False)
             outputs, labels, inputs = test(
@@ -503,7 +504,8 @@ def main(
                 locations_1.append(tuple(coordinates[0, :]))
                 locations_2.append(tuple(coordinates[1, :]))
 
-            visualize_lattice(locations_1, locations_2, outputs, true_diameters=labels)
+            visualize_lattice(locations_1, locations_2, outputs) #, true_diameters=labels)
+            visualize_lattice(locations_1, locations_2, labels)
 
 
             # graph = copy.deepcopy(test_dataset[0])
@@ -512,10 +514,6 @@ def main(
             # graph.y = graph.y[:i, :]
 
             # i = 3
-
-            # # Histogram of predicted values.
-            # plt.hist(outputs[i], bins=20)
-            # plt.show()
 
             # graph = test_dataset[i]
             # graph.edge_attr = outputs[i]
@@ -537,11 +535,11 @@ if __name__ == "__main__":
         "data_split": (0.8, 0.1, 0.1),
         
         "dataset": LocalDataset(1000, p=0.1),
-        "Model": ResNetLocal,
+        "Model": ResNet,
         "Optimizer": torch.optim.Adam,
         "Loss": nn.MSELoss,
         
-        "train_model": not True,
+        "train_model": True,
         "test_model": True,
         "visualize_results": True,
     }

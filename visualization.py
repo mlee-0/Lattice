@@ -205,7 +205,8 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
     iren.SetRenderWindow(window)
 
     if true_diameters is not None:
-        max_error = np.abs(np.array(diameters) - np.array(true_diameters)).max()
+        # The error value corresponding to red.
+        max_error = 1 #np.abs(np.array(diameters) - np.array(true_diameters)).max()
 
     for i, ((x1, y1, z1), (x2, y2, z2), diameter) in enumerate(zip(locations_1, locations_2, diameters)):
         line = vtk.vtkLineSource()

@@ -19,7 +19,7 @@ def residual(in_channels, out_channels):
     )
 
 
-class Cnn(torch.nn.Module):
+class CnnVector(torch.nn.Module):
     """3D CNN whose input is a 3D array of densities and whose output is a 1D array of strut diameters."""
 
     def __init__(self, device: str='cpu') -> None:
@@ -85,7 +85,7 @@ class Cnn(torch.nn.Module):
 
         return x
 
-class ResNet(torch.nn.Module):
+class ResNetVector(torch.nn.Module):
     """3D ResNet-based CNN whose input is a 3D array of densities and whose output is a 1D array of strut diameters."""
     def __init__(self, device: str='cpu') -> None:
         super().__init__()
@@ -148,7 +148,7 @@ class ResNet(torch.nn.Module):
 
         return x
 
-class ResNetLocal(torch.nn.Module):
+class ResNet(torch.nn.Module):
     """3D ResNet-based CNN whose input is a 3D array of densities and whose output is a single strut diameter."""
 
     def __init__(self, device: str='cpu') -> None:
@@ -175,22 +175,22 @@ class ResNetLocal(torch.nn.Module):
             torch.nn.BatchNorm3d(c*1),
             torch.nn.ReLU(inplace=True),
         )
-        self.convolution_4 = torch.nn.Sequential(
-            torch.nn.Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-            torch.nn.BatchNorm3d(c*1),
-            torch.nn.ReLU(inplace=True),
-        )
-        self.convolution_5 = torch.nn.Sequential(
-            torch.nn.Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-            torch.nn.BatchNorm3d(c*1),
-            torch.nn.ReLU(inplace=True),
-        )
+        # self.convolution_4 = torch.nn.Sequential(
+        #     torch.nn.Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+        #     torch.nn.BatchNorm3d(c*1),
+        #     torch.nn.ReLU(inplace=True),
+        # )
+        # self.convolution_5 = torch.nn.Sequential(
+        #     torch.nn.Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+        #     torch.nn.BatchNorm3d(c*1),
+        #     torch.nn.ReLU(inplace=True),
+        # )
 
         self.residual_1 = residual(c*1, c*1)
         self.residual_2 = residual(c*1, c*1)
         self.residual_3 = residual(c*1, c*1)
-        self.residual_4 = residual(c*1, c*1)
-        self.residual_5 = residual(c*1, c*1)
+        # self.residual_4 = residual(c*1, c*1)
+        # self.residual_5 = residual(c*1, c*1)
 
         self.global_pooling = torch.nn.AdaptiveAvgPool3d(output_size=(1, 1, 1))
         self.linear = torch.nn.Linear(in_features=c*1, out_features=1)
@@ -204,58 +204,15 @@ class ResNetLocal(torch.nn.Module):
         x = torch.relu(x + self.residual_2(x))
         x = self.convolution_3(x)
         x = torch.relu(x + self.residual_3(x))
-        x = self.convolution_4(x)
-        x = torch.relu(x + self.residual_4(x))
-        x = self.convolution_5(x)
-        x = torch.relu(x + self.residual_5(x))
+        # x = self.convolution_4(x)
+        # x = torch.relu(x + self.residual_4(x))
+        # x = self.convolution_5(x)
+        # x = torch.relu(x + self.residual_5(x))
 
         x = self.global_pooling(x)[:, :, 0, 0, 0]
         x = self.linear(x)
         x = torch.sigmoid(x)
 
-        return x
-
-class Inception(torch.nn.Module):
-    def __init__(self, device: str='cpu') -> None:
-        super().__init__()
-
-        input_channels = 2
-
-        # Number of output channels in the first layer.
-        c = 4
-
-        self.convolution_1 = Sequential(
-            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=1, stride=1, padding='same'),
-            BatchNorm3d(c*1),
-            ReLU(inplace=True),
-        )
-        self.convolution_3 = Sequential(
-            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-            BatchNorm3d(c*1),
-            ReLU(),
-        )
-        self.convolution_5 = Sequential(
-            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=5, stride=1, padding='same'),
-            BatchNorm3d(c*1),
-            ReLU(),
-        )
-        # self.convolution_7 = Sequential(
-        #     Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=7, stride=1, padding='same'),
-        #     ReLU(),
-        # )
-
-        self.pooling = AvgPool3d((1, 1, 1))
-        self.linear = Linear(in_features=(c*1)*3, out_features=1)
-
-    def forward(self, x):
-        x = torch.cat([
-            self.convolution_1(x),
-            self.convolution_3(x),
-            self.convolution_5(x),
-            # self.convolution_7(x),
-        ], dim=1)
-        x = self.pooling(x)[..., 0, 0, 0]
-        x = self.linear(x)
         return x
 
 # class Gnn(torch.nn.Module):
