@@ -201,6 +201,8 @@ def train(
         # Calculate evaluation metrics on validation results.
         outputs = np.concatenate(outputs, axis=0)
         labels = np.concatenate(labels, axis=0)
+        # train_dataloader.dataset.dataset.unnormalize(outputs)
+        # train_dataloader.dataset.dataset.unnormalize(labels)
         results = metrics.evaluate(outputs, labels)
         for metric, value in results.items():
             print(f"{metric}: {value:.3f}")
@@ -310,13 +312,8 @@ def test(
 
     return outputs, labels, inputs
 
-def evaluate(outputs: List[np.ndarray], labels: List[np.ndarray], inputs: List[np.ndarray], dataset: Dataset, queue=None, info_gui: dict=None):
+def evaluate(outputs: np.ndarray, labels: np.ndarray, inputs: np.ndarray, dataset: Dataset, queue=None, info_gui: dict=None):
     """Calculate and return evaluation metrics."""
-
-    # Concatenate results from all batches into a single array.
-    inputs = np.concatenate(inputs, axis=0)
-    outputs = np.concatenate(outputs, axis=0)
-    labels = np.concatenate(labels, axis=0)
 
     results = metrics.evaluate(outputs, labels)
     for metric, value in results.items():
@@ -409,6 +406,7 @@ def main(
     # Initialize the model, optimizer, and loss function.
     model = Model(device)
     model.to(device)
+    print(f"Using model {type(model).__name__} with {get_parameter_count(model):,} parameters.")
     optimizer = Optimizer(model.parameters(), lr=learning_rate)
     if decay_learning_rate:
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
@@ -450,7 +448,7 @@ def main(
             queue = queue,
             queue_to_main = queue_to_main,
             info_gui = info_gui,
-            )
+        )
     
     if test_model:
         outputs, labels, inputs = test(
@@ -463,49 +461,55 @@ def main(
             info_gui = info_gui,
         )
 
+        outputs = np.concatenate(outputs, axis=0)
+        labels = np.concatenate(labels, axis=0)
+        inputs = np.concatenate(inputs, axis=0)
+
+        # # Restore range of values for labels and predictions.
+        # dataset.unnormalize(outputs)
+        # dataset.unnormalize(labels)
         results = evaluate(outputs, labels, inputs, dataset, queue=queue, info_gui=info_gui)
 
         if visualize_results:
             # Calculate (x, y, z) coordinates of each node.
             locations_1 = []
             locations_2 = []
-            for input_ in inputs:
-                for i in range(input_.shape[0]):
-                    coordinates = np.argwhere(input_[i, 1, ...])
-                    assert coordinates.shape[0] == 2
-                    locations_1.append(tuple(coordinates[0, :]))
-                    locations_2.append(tuple(coordinates[1, :]))
-
-            metrics.plot_histograms(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0), bins=20)
-            metrics.plot_error_by_true(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0))
-            metrics.plot_error_by_angle(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0), locations_1, locations_2)
-            metrics.plot_error_by_edge_distance(np.concatenate(outputs, axis=0), np.concatenate(labels, axis=0), locations_1, locations_2)
-
-            # If predicting local strut diameters, visualize the predictions on all struts in a single lattice structure.
-            dataset.p = 1.0
-            indices = dataset.get_indices_for_images([test_image_indices[0]])
-            loader = DataLoader(Subset(dataset, indices), batch_size=1, shuffle=False)
-            outputs, labels, inputs = test(
-                device = device,
-                model = model,
-                loss_function = loss_function,
-                test_dataloader = loader,
-                queue = queue,
-                queue_to_main = queue_to_main,
-                info_gui = info_gui,
-            )
-
-            # Calculate (x, y, z) coordinates of each node.
-            locations_1 = []
-            locations_2 = []
-            for input_ in inputs:
-                coordinates = np.argwhere(input_[0, 1, ...])
+            for i in range(inputs.shape[0]):
+                coordinates = np.argwhere(inputs[i, 1, ...])
                 assert coordinates.shape[0] == 2
                 locations_1.append(tuple(coordinates[0, :]))
                 locations_2.append(tuple(coordinates[1, :]))
 
-            visualize_lattice(locations_1, locations_2, outputs) #, true_diameters=labels)
-            visualize_lattice(locations_1, locations_2, labels)
+            metrics.plot_histograms(outputs, labels, bins=20)
+            metrics.plot_error_by_true(outputs, labels)
+            metrics.plot_error_by_angle(outputs, labels, locations_1, locations_2)
+            metrics.plot_error_by_edge_distance(outputs, labels, locations_1, locations_2)
+
+            # # If predicting local strut diameters, visualize the predictions on all struts in a single lattice structure.
+            # dataset.p = 1.0
+            # indices = dataset.get_indices_for_images([test_image_indices[0]])
+            # loader = DataLoader(Subset(dataset, indices), batch_size=1, shuffle=False)
+            # outputs, labels, inputs = test(
+            #     device = device,
+            #     model = model,
+            #     loss_function = loss_function,
+            #     test_dataloader = loader,
+            #     queue = queue,
+            #     queue_to_main = queue_to_main,
+            #     info_gui = info_gui,
+            # )
+
+            # # Calculate (x, y, z) coordinates of each node.
+            # locations_1 = []
+            # locations_2 = []
+            # for input_ in inputs:
+            #     coordinates = np.argwhere(input_[0, 1, ...])
+            #     assert coordinates.shape[0] == 2
+            #     locations_1.append(tuple(coordinates[0, :]))
+            #     locations_2.append(tuple(coordinates[1, :]))
+
+            # visualize_lattice(locations_1, locations_2, outputs) #, true_diameters=labels)
+            # visualize_lattice(locations_1, locations_2, labels)
 
 
             # graph = copy.deepcopy(test_dataset[0])
@@ -528,20 +532,20 @@ if __name__ == "__main__":
         "train_existing": not True,
         "save_model_every": 1,
 
+        "train_model": True,
+        "test_model": True,
+        "visualize_results": True,
+
         "epoch_count": 5,
         "learning_rate": 1e-3,
         "decay_learning_rate": not True,
         "batch_sizes": (32, 32, 32),
         "data_split": (0.8, 0.1, 0.1),
         
-        "dataset": LocalDataset(1000, p=0.1),
+        "dataset": LocalStrutDataset(1000, p=0.1),
         "Model": ResNet,
         "Optimizer": torch.optim.Adam,
         "Loss": nn.MSELoss,
-        
-        "train_model": True,
-        "test_model": True,
-        "visualize_results": True,
     }
 
     main(**kwargs)

@@ -95,13 +95,16 @@ class VectorDataset(torch.utils.data.Dataset):
 #         # Return the entire graph. Returning individual attributes (x, edge_index, y) results in incorrect batching.
 #         return self.dataset[index]
 
-class LocalDataset(torch.utils.data.Dataset):
-    """Density and node location data as 2-channel 3D tensors and strut diameter data as scalars. The node location channel is a binary array with values {0, 1}."""
+class LocalStrutDataset(torch.utils.data.Dataset):
+    """Density and node location data as 2-channel 3D tensors and strut diameter data as scalars. The node location channel is a binary array with values {0, 1}.
+    
+    In this dataset, a single input image corresponds to many struts. Splitting this dataset for training and testing should be done by input image, instead of by strut, in order to ensure that struts corresponding to input images in the training set do not show up in the testing set.
+    """
 
     def __init__(self, count: int=None, p: float=1.0) -> None:
         """
         `count`: Number of input images to include in the dataset. All struts associated with these images are included.
-        `p`: Proportion of data to include in the dataset. For example, if 0.1, approximately 10% of the data are included.
+        `p`: Proportion of data to include in the dataset. For example, if 0.1, 10% of the data are randomly sampled. Set a random seed before initializing this dataset to ensure reproducibility.
         """
 
         super().__init__()
@@ -119,6 +122,12 @@ class LocalDataset(torch.utils.data.Dataset):
         # Normalize input data to have zero mean and unit variance.
         self.inputs -= self.inputs.mean()
         self.inputs /= self.inputs.std()
+
+        # # Normzalize label data to have zero mean and unit variance.
+        # self.diameter_mean = self.diameters.mean().item()
+        # self.diameter_std = self.diameters.std().item()
+        # self.diameters -= self.diameter_mean
+        # self.diameters /= self.diameter_std
 
         # Add a second channel for storing node locations. Values should not be normalized.
         self.inputs = torch.cat([self.inputs, torch.zeros_like(self.inputs)], dim=1)
@@ -157,11 +166,16 @@ class LocalDataset(torch.utils.data.Dataset):
         indices = [i for i, output in enumerate(self.outputs) if output[0] in image_indices]
         indices = random.sample(indices, round(self.p * len(indices)))
         return indices
+    
+    # def unnormalize(self, x: torch.Tensor) -> None:
+    #     """Apply the inverse of normalization to the given tensor, in-place."""
+    #     x *= self.diameter_std
+    #     x += self.diameter_mean
+
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    dataset = LocalDataset(1000, p=0.5)
-    print(dataset.diameters.mean())
+    dataset = LocalStrutDataset(1000, p=1.0)
     plt.figure()
     plt.hist(dataset.diameters.squeeze().numpy(), bins=25)
     plt.show()

@@ -427,7 +427,7 @@ def read_pickle(path: str) -> Any:
     if type(data) is torch.Tensor:
         print(f"Loaded tensor with size {data.size()} from {path}.")
     else:
-        print(f"Loaded {type(data)} with length {len(data)} from {path}.")
+        print(f"Loaded {type(data).__name__} with length {len(data):,} from {path}.")
 
     return data
 
