@@ -12,7 +12,14 @@ from PIL import Image
 import torch
 # import torch_geometric
 
-from main import DATASET_FOLDER
+
+try:
+    from google.colab import drive  # type: ignore
+except ImportError:
+    DATASET_FOLDER = 'Training_Data_10'
+else:
+    drive.mount('/content/drive')
+    DATASET_FOLDER = 'drive/My Drive/Lattice'
 
 
 # Size of input images (height, width, depth). Images are stacked along the depth dimension.

@@ -1,12 +1,3 @@
-try:
-    from google.colab import drive  # type: ignore
-except ImportError:
-    DATASET_FOLDER = 'Training_Data_10'
-else:
-    drive.mount('/content/drive')
-    DATASET_FOLDER = 'drive/My Drive/Lattice'
-
-
 import os
 from queue import Queue
 import random
@@ -23,6 +14,7 @@ from torch.utils.data import Dataset, Subset, DataLoader
 from datasets import *
 import metrics
 from models import *
+from preprocessing import DATASET_FOLDER
 from visualization import *
 
 
@@ -160,9 +152,6 @@ def train(
             scheduler.step()
             learning_rate = optimizer.param_groups[0]["lr"]
             print(f"Learning rate: {learning_rate}")
-            if queue:
-                info_gui["info_training"]["Learning Rate"] = learning_rate
-                queue.put(info_gui)
 
         # Test on the validation dataset. Set model to evaluation mode, which is required if it contains batch normalization layers, dropout layers, and other layers that behave differently during training and evaluation.
         model.train(False)
@@ -232,7 +221,6 @@ def train(
             info_gui["progress_epoch"] = (epoch, epochs[-1])
             info_gui["training_loss"] = training_loss
             info_gui["validation_loss"] = validation_loss
-            info_gui["info_training"]["Epoch Runtime"] = duration_text
             queue.put(info_gui)
         
         # Requested to stop from GUI.
@@ -296,19 +284,6 @@ def test(
     print()
     loss /= batch
     print(f"Testing loss: {loss:,.2e}")
-    
-    # # Concatenate testing results from all batches into a single array.
-    # inputs = np.concatenate(inputs, axis=0)
-    # outputs = np.concatenate(outputs, axis=0)
-    # labels = np.concatenate(labels, axis=0)
-
-    # if queue:
-    #     info_gui["info_metrics"] = {f"Loss ({loss_function})": loss}
-    #     info_gui["test_inputs"] = inputs
-    #     info_gui["test_outputs"] = outputs
-    #     info_gui["test_labels"] = labels
-    #     info_gui["test_max_value"] = dataset.max_value
-    #     queue.put(info_gui)
 
     return outputs, labels, inputs
 
@@ -335,8 +310,6 @@ def main(
     queue: Queue = None, queue_to_main: Queue = None,
 ):
     """
-    Function run directly by this file and by the GUI.
-
     Parameters:
     `train_model`: Train the model.
     `test_model`: Test the model.
@@ -363,7 +336,6 @@ def main(
 
     # Initialize values to send to the GUI.
     info_gui = {
-        "info_training": {},
         "info_metrics": {},
     } if queue else None
     
@@ -424,13 +396,6 @@ def main(
                 "training_loss": checkpoint["training_loss"],
                 "validation_loss": checkpoint["validation_loss"],
             })
-    
-    if queue:
-        info_gui["info_training"]["Training Size"] = train_size
-        info_gui["info_training"]["Validation Size"] = validate_size
-        info_gui["info_training"]["Testing Size"] = test_size
-        info_gui["info_training"]["Learning Rate"] = learning_rate
-        queue.put(info_gui)
 
     if train_model:
         model = train(
@@ -526,26 +491,26 @@ def main(
             # visualize_lattice(*lattice, [_.item() for _ in graph.y])
 
 
+kwargs = {
+    "filename_model": "model.pth",
+    "train_existing": not True,
+    "save_model_every": 1,
+
+    "train_model": True,
+    "test_model": True,
+    "visualize_results": True,
+
+    "epoch_count": 5,
+    "learning_rate": 1e-3,
+    "decay_learning_rate": not True,
+    "batch_sizes": (32, 32, 32),
+    "data_split": (0.8, 0.1, 0.1),
+    
+    "dataset": LocalStrutDataset(1000, p=0.1),
+    "Model": ResNet,
+    "Optimizer": torch.optim.Adam,
+    "Loss": nn.MSELoss,
+}
+
 if __name__ == "__main__":
-    kwargs = {
-        "filename_model": "model.pth",
-        "train_existing": not True,
-        "save_model_every": 1,
-
-        "train_model": True,
-        "test_model": True,
-        "visualize_results": True,
-
-        "epoch_count": 5,
-        "learning_rate": 1e-3,
-        "decay_learning_rate": not True,
-        "batch_sizes": (32, 32, 32),
-        "data_split": (0.8, 0.1, 0.1),
-        
-        "dataset": LocalStrutDataset(1000, p=0.1),
-        "Model": ResNet,
-        "Optimizer": torch.optim.Adam,
-        "Loss": nn.MSELoss,
-    }
-
     main(**kwargs)

@@ -31,30 +31,30 @@ class ResNet(torch.nn.Module):
         # Number of output channels in the first layer.
         c = 4
 
-        self.convolution_1 = torch.nn.Sequential(
-            torch.nn.Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-            torch.nn.BatchNorm3d(c*1),
-            torch.nn.ReLU(inplace=True),
+        self.convolution_1 = Sequential(
+            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*1),
+            ReLU(inplace=True),
         )
-        self.convolution_2 = torch.nn.Sequential(
-            torch.nn.Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-            torch.nn.BatchNorm3d(c*1),
-            torch.nn.ReLU(inplace=True),
+        self.convolution_2 = Sequential(
+            Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*1),
+            ReLU(inplace=True),
         )
-        self.convolution_3 = torch.nn.Sequential(
-            torch.nn.Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-            torch.nn.BatchNorm3d(c*1),
-            torch.nn.ReLU(inplace=True),
+        self.convolution_3 = Sequential(
+            Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*1),
+            ReLU(inplace=True),
         )
-        # self.convolution_4 = torch.nn.Sequential(
-        #     torch.nn.Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-        #     torch.nn.BatchNorm3d(c*1),
-        #     torch.nn.ReLU(inplace=True),
+        # self.convolution_4 = Sequential(
+        #     Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+        #     BatchNorm3d(c*1),
+        #     ReLU(inplace=True),
         # )
-        # self.convolution_5 = torch.nn.Sequential(
-        #     torch.nn.Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-        #     torch.nn.BatchNorm3d(c*1),
-        #     torch.nn.ReLU(inplace=True),
+        # self.convolution_5 = Sequential(
+        #     Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+        #     BatchNorm3d(c*1),
+        #     ReLU(inplace=True),
         # )
 
         self.residual_1 = residual(c*1, c*1)
@@ -63,8 +63,8 @@ class ResNet(torch.nn.Module):
         # self.residual_4 = residual(c*1, c*1)
         # self.residual_5 = residual(c*1, c*1)
 
-        # self.global_pooling = torch.nn.AdaptiveAvgPool3d(output_size=(1, 1, 1))
-        self.linear = torch.nn.Linear(in_features=c*1*(11**3), out_features=1)
+        self.pooling = AdaptiveAvgPool3d(output_size=(1, 1, 1))
+        self.linear = Linear(in_features=c*1, out_features=1)
 
     def forward(self, x):
         batch_size = x.size(0)
@@ -80,7 +80,7 @@ class ResNet(torch.nn.Module):
         # x = self.convolution_5(x)
         # x = torch.relu(x + self.residual_5(x))
 
-        # x = self.global_pooling(x)
+        x = self.pooling(x)
         x = self.linear(x.view(batch_size, -1))
         x = torch.sigmoid(x)
 
