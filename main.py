@@ -112,40 +112,43 @@ def train(
         model.train(True)
         loss = 0
 
-        for batch, (input_data, label_data) in enumerate(train_dataloader, 1):
-            input_data = input_data.to(device)
-            label_data = label_data.to(device)
-            output_data = model(input_data)
-            # Calculate the loss.
-            loss_current = loss_function(output_data, label_data)
-            loss += loss_current.item()
+        try:
+            for batch, (input_data, label_data) in enumerate(train_dataloader, 1):
+                input_data = input_data.to(device)
+                label_data = label_data.to(device)
+                output_data = model(input_data)
+                # Calculate the loss.
+                loss_current = loss_function(output_data, label_data)
+                loss += loss_current.item()
 
-            if loss_current is torch.nan:
-                print(f"Stopping due to nan loss.")
-                break
-            
-            # Reset gradients of model parameters.
-            optimizer.zero_grad()
-            # Backpropagate the prediction loss.
-            loss_current.backward()
-            # Adjust model parameters.
-            optimizer.step()
+                if loss_current is torch.nan:
+                    print(f"Stopping due to nan loss.")
+                    break
+                
+                # Reset gradients of model parameters.
+                optimizer.zero_grad()
+                # Backpropagate the prediction loss.
+                loss_current.backward()
+                # Adjust model parameters.
+                optimizer.step()
 
-            if batch % 10 == 0:
-                print(f"Batch {batch}/{len(train_dataloader)}: {loss_current.item():,.2e}...", end="\r")
-                if queue:
-                    info_gui["progress_batch"] = (batch, len(train_dataloader)+len(validate_dataloader))
-                    info_gui["training_loss"] = [*training_loss, loss/batch]
-                    queue.put(info_gui)
-            
-            # Requested to stop from GUI.
-            if queue_to_main and not queue_to_main.empty():
-                break
+                if batch % 10 == 0:
+                    print(f"Batch {batch}/{len(train_dataloader)}: {loss_current.item():,.2e}...", end="\r")
+                    if queue:
+                        info_gui["progress_batch"] = (batch, len(train_dataloader)+len(validate_dataloader))
+                        info_gui["training_loss"] = [*training_loss, loss/batch]
+                        queue.put(info_gui)
+                
+                # Requested to stop from GUI.
+                if queue_to_main and not queue_to_main.empty():
+                    break
+
+        except KeyboardInterrupt:
+            break
         
-        print()
         loss /= batch
         training_loss.append(loss)
-        print(f"Training loss: {loss:,.2e}")
+        print(f"\nTraining loss: {loss:,.2e}")
 
         # Adjust the learning rate if a scheduler is used.
         if scheduler:
@@ -261,29 +264,32 @@ def test(
 
     with torch.no_grad():
         for batch, (input_data, label_data) in enumerate(test_dataloader, 1):
-            input_data = input_data.to(device)
-            label_data = label_data.to(device)
-            output_data = model(input_data)
-            loss += loss_function(output_data, label_data).item()
+            try:
+                input_data = input_data.to(device)
+                label_data = label_data.to(device)
+                output_data = model(input_data)
+                loss += loss_function(output_data, label_data).item()
 
-            # Convert to NumPy arrays for evaluation metric calculations.
-            input_data = input_data.cpu().detach().numpy()
-            output_data = output_data.cpu().detach().numpy()
-            label_data = label_data.cpu().numpy()
+                # Convert to NumPy arrays for evaluation metric calculations.
+                input_data = input_data.cpu().detach().numpy()
+                output_data = output_data.cpu().detach().numpy()
+                label_data = label_data.cpu().numpy()
 
-            inputs.append(input_data)
-            labels.append(label_data)
-            outputs.append(output_data)
+                inputs.append(input_data)
+                labels.append(label_data)
+                outputs.append(output_data)
+                
+                if batch % 10 == 0:
+                    print(f"Batch {batch}/{len(test_dataloader)}...", end="\r")
+                    if queue:
+                        info_gui["progress_batch"] = (batch, len(test_dataloader))
+                        queue.put(info_gui)
             
-            if batch % 10 == 0:
-                print(f"Batch {batch}/{len(test_dataloader)}...", end="\r")
-                if queue:
-                    info_gui["progress_batch"] = (batch, len(test_dataloader))
-                    queue.put(info_gui)
+            except KeyboardInterrupt:
+                break
     
-    print()
     loss /= batch
-    print(f"Testing loss: {loss:,.2e}")
+    print(f"\nTesting loss: {loss:,.2e}")
 
     return outputs, labels, inputs
 
@@ -332,7 +338,7 @@ def main(
     """
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using {device} device.")
+    print(f"\nUsing {device} device.")
 
     # Initialize values to send to the GUI.
     info_gui = {
@@ -492,13 +498,13 @@ def main(
 
 
 kwargs = {
-    "filename_model": "model.pth",
-    "train_existing": not True,
-    "save_model_every": 1,
-
     "train_model": True,
     "test_model": True,
     "visualize_results": True,
+
+    "filename_model": "model.pth",
+    "train_existing": not True,
+    "save_model_every": 1,
 
     "epoch_count": 5,
     "learning_rate": 1e-3,

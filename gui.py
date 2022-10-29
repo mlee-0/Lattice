@@ -168,7 +168,7 @@ class MainWindow(QMainWindow):
     
     def on_start(self):
         """Start training or testing."""
-        # self.sidebar.setEnabled(False)
+        self.button_start.setEnabled(False)
         self.console.clear()
         self.progress_bar.setRange(0, 0)
         self.button_stop.setEnabled(True)
@@ -304,7 +304,7 @@ class MainWindow(QMainWindow):
                 
         # Thread has stopped.
         if not self.thread.is_alive():
-            # self.sidebar.setEnabled(True)
+            self.button_start.setEnabled(True)
             self.button_stop.setEnabled(False)
             self.progress_bar.setRange(0, 1)
             self.progress_bar.reset()

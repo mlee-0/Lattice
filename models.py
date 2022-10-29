@@ -86,6 +86,97 @@ class ResNet(torch.nn.Module):
 
         return x
 
+class DenseNet(torch.nn.Module):
+
+    def __init__(self, device: str='cpu') -> None:
+        super().__init__()
+        self.device = device
+
+        input_channels = 2
+
+        # Number of output channels in the first layer.
+        c = 4
+
+        self.convolution_1 = Sequential(
+            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*1),
+            ReLU(inplace=True),
+        )
+        self.convolution_2 = Sequential(
+            Conv3d(in_channels=input_channels+c*1, out_channels=input_channels+c*1, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(input_channels+c*1),
+            ReLU(inplace=True),
+        )
+        self.convolution_3 = Sequential(
+            Conv3d(in_channels=(input_channels+c*1)*2, out_channels=(input_channels+c*1)*2, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d((input_channels+c*1)*2),
+            ReLU(inplace=True),
+        )
+
+        # self.residual_1 = residual(c*1, c*1)
+        # self.residual_2 = residual(c*1, c*1)
+        # self.residual_3 = residual(c*1, c*1)
+
+        self.pooling = AdaptiveAvgPool3d(output_size=(1, 1, 1))
+        self.linear = Linear(in_features=(input_channels+c*1)*2, out_features=1)
+
+    def forward(self, x):
+        batch_size = x.size(0)
+
+        x1 = self.convolution_1(x)
+        x2 = self.convolution_2(torch.cat([x, x1], dim=1))
+        x3 = self.convolution_3(torch.cat([x, x1, x2], dim=1))
+        # x = torch.relu(x + self.residual_1(x))
+        # x = torch.relu(x + self.residual_2(x))
+        # x = torch.relu(x + self.residual_3(x))
+
+        x = self.pooling(x3)
+        x = self.linear(x.view(batch_size, -1))
+
+        return x
+
+class ResOnly(torch.nn.Module):
+
+    def __init__(self, device: str='cpu') -> None:
+        super().__init__()
+        self.device = device
+
+        input_channels = 2
+
+        # Number of output channels in the first layer.
+        c = 4
+
+        self.convolution = Sequential(
+            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=1, stride=1, padding=0),
+            BatchNorm3d(c*1),
+            ReLU(inplace=True),
+        )
+
+        self.residual_1 = residual(c*1, c*1)
+        self.residual_2 = residual(c*1, c*1)
+        self.residual_3 = residual(c*1, c*1)
+        # self.residual_4 = residual(c*1, c*1)
+        # self.residual_5 = residual(c*1, c*1)
+
+        self.pooling = AdaptiveAvgPool3d(output_size=(1, 1, 1))
+        self.linear = Linear(in_features=c*1, out_features=1)
+
+    def forward(self, x):
+        batch_size = x.size(0)
+
+        x = self.convolution(x)
+        x = torch.relu(x + self.residual_1(x))
+        x = torch.relu(x + self.residual_2(x))
+        x = torch.relu(x + self.residual_3(x))
+        # x = torch.relu(x + self.residual_4(x))
+        # x = torch.relu(x + self.residual_5(x))
+
+        x = self.pooling(x)
+        x = self.linear(x.view(batch_size, -1))
+        x = torch.sigmoid(x)
+
+        return x
+
 class CnnVector(torch.nn.Module):
     """3D CNN whose input is a 3D array of densities and whose output is a 1D array of strut diameters."""
 
