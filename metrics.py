@@ -42,8 +42,8 @@ def fraction_of_zeros_incorrect(p, y) -> float:
     else:
         return (zero_predictions != 0).sum() / zero_predictions.size
 
-def plot_error_by_true(p, y):
-    """Plot the errors vs. true values sorted from lowest to highest. Intended to reveal which ranges of values produce inaccurate predictions."""
+def plot_predicted_vs_true(p, y):
+    """Plot the predictions vs. true values sorted from lowest to highest. Intended to reveal which ranges of values produce inaccurate predictions."""
     p, y = p.flatten(), y.flatten()
     p, y = np.array(sorted(
         np.concatenate([p[:, None], y[:, None]], axis=1),
@@ -51,11 +51,13 @@ def plot_error_by_true(p, y):
     )).transpose()
 
     plt.figure()
-    plt.plot(y, p-y, '.')
-    plt.grid()
+    plt.plot(y, p, '.')
+    plt.plot([0, 1], [0, 1], 'k--')
+    plt.xlim([0, 1])
+    plt.ylim([0, 1])
     plt.xlabel('True')
-    plt.ylabel('Error')
-    plt.title(f'Errors By True Values ({p.size} data)')
+    plt.ylabel('Predicted')
+    plt.title(f'Predictions vs. True Values ({p.size} data)')
     plt.show()
 
 def plot_error_by_edge_distance(p, y, locations_1: List[Tuple[int, int, int]], locations_2: List[Tuple[int, int, int]]):

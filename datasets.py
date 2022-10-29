@@ -75,10 +75,8 @@ class LocalStrutDataset(torch.utils.data.Dataset):
 
         return train_image_indices, validate_image_indices, test_image_indices
 
-    def get_indices_for_images(self, image_indices: Union[int, List[int]]):
+    def get_indices_for_images(self, image_indices: List[int]):
         """Return indices for data corresponding to the specified image index."""
-        if type(image_indices) is int:
-            image_indices = [image_indices]
         image_indices = set(image_indices)
         indices = [i for i, output in enumerate(self.outputs) if output[0] in image_indices]
         indices = random.sample(indices, round(self.p * len(indices)))

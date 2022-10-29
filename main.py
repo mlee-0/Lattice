@@ -446,7 +446,7 @@ def main(
                 locations_2.append(tuple(coordinates[1, :]))
 
             metrics.plot_histograms(outputs, labels, bins=20)
-            metrics.plot_error_by_true(outputs, labels)
+            metrics.plot_predicted_vs_true(outputs, labels)
             metrics.plot_error_by_angle(outputs, labels, locations_1, locations_2)
             metrics.plot_error_by_edge_distance(outputs, labels, locations_1, locations_2)
 

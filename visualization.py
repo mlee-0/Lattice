@@ -23,7 +23,7 @@ def plot_nodes(array: np.ndarray, opacity: float=1.0) -> None:
     # ax.set(xlim=axis_limits, ylim=axis_limits, zlim=axis_limits)
     plt.show()
 
-def visualize_input(array: np.ndarray, opacity: float=0.5) -> None:
+def visualize_input(array: np.ndarray, opacity: float=0.5, length: float=1.0, use_lighting: bool=False) -> None:
     """Start a visualization of a 3D input image."""
 
     ren = vtk.vtkRenderer()
@@ -51,7 +51,9 @@ def visualize_input(array: np.ndarray, opacity: float=0.5) -> None:
     data.GetPointData().AddArray(colors)
 
     glyph = vtk.vtkCubeSource()
-    # glyph.SetBounds([-0.4, 0.4] * 3)
+    glyph.SetXLength(length)
+    glyph.SetYLength(length)
+    glyph.SetZLength(length)
     mapper = vtk.vtkGlyph3DMapper()
     mapper.SetSourceConnection(glyph.GetOutputPort())
     mapper.SetInputData(data)
@@ -63,10 +65,12 @@ def visualize_input(array: np.ndarray, opacity: float=0.5) -> None:
     actor.SetMapper(mapper)
     actor.GetProperty().SetLineWidth(1)
     actor.GetProperty().SetOpacity(opacity)
-    actor.GetProperty().SetLighting(False)
+    actor.GetProperty().SetLighting(use_lighting)
 
     ren.AddActor(actor)
     ren.GetActiveCamera().SetParallelProjection(True)
+    ren.GetActiveCamera().Azimuth(45)
+    ren.GetActiveCamera().Elevation(45)
     ren.ResetCamera()
     iren.Initialize()
     window.Render()
@@ -260,7 +264,12 @@ if __name__ == "__main__":
     # visualize_lattice(*lattice)
 
     inputs = read_pickle('Training_Data_10/inputs.pickle')
-    visualize_input(inputs[0, 0, ...], 1)
+    visualize_input(inputs[0, 0, ...], opacity=1, length=0.9, use_lighting=True)
+    # a = np.zeros([6, 6, 6])
+    # a[2, 2, 2] = 255
+    # a[3, 3, 3] = 255
+    # visualize_input(a, 1)
+
 
     # graphs = read_pickle('Training_Data_10/graphs.pickle')
     # lattice = convert_graph_to_lattice(graphs[0])

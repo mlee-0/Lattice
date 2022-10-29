@@ -265,22 +265,3 @@ class ResNetVector(torch.nn.Module):
 #         # x = torch.sigmoid(x)
 
 #         return x
-
-# class Gnn0(torch.nn.Module):
-#     """GNN without learnable parameters that does a simple averaging of adjacent nodes to calculate strut diameters.."""
-
-#     def __init__(self, device: str=None) -> None:
-#         super().__init__()
-
-#         self.convolution = torch_geometric.nn.GCNConv(1, 1)
-
-#     def forward(self, x, edge_index):
-#         # Predict edge values with shape (number of edges across batch,).
-#         x = torch.sum(
-#             (x[edge_index[0, :], :] + x[edge_index[1, :], :]) / 2,
-#             dim=-1,
-#         )
-#         # Average each pair of edges that represent the same strut (for example, (1, 2) and (2, 1)) with shape (half the original number of edges, 1). The second dimension is included for compatibility with the labels used during training.
-#         x = torch.mean(x.view([2, x.size(-1)//2]), dim=0)[:, None]
-
-#         return x
