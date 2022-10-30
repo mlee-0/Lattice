@@ -133,7 +133,7 @@ def train(
                 optimizer.step()
 
                 if batch % 10 == 0:
-                    print(f"Batch {batch}/{len(train_dataloader)}: {loss_current.item():,.2e}...", end="\r")
+                    print(f"\rBatch {batch}/{len(train_dataloader)}: {loss_current.item():,.2e}...", end="")
                     if queue:
                         info_gui["progress_batch"] = (batch, len(train_dataloader)+len(validate_dataloader))
                         info_gui["training_loss"] = [*training_loss, loss/batch]
@@ -176,7 +176,7 @@ def train(
                 labels.append(label_data)
 
                 if batch % 10 == 0:
-                    print(f"Batch {batch}/{len(validate_dataloader)}...", end="\r")
+                    print(f"\rBatch {batch}/{len(validate_dataloader)}...", end="")
                     if queue:
                         info_gui["progress_batch"] = (len(train_dataloader)+batch, len(train_dataloader)+len(validate_dataloader))
                         queue.put(info_gui)
@@ -280,7 +280,7 @@ def test(
                 outputs.append(output_data)
                 
                 if batch % 10 == 0:
-                    print(f"Batch {batch}/{len(test_dataloader)}...", end="\r")
+                    print(f"\rBatch {batch}/{len(test_dataloader)}...", end="")
                     if queue:
                         info_gui["progress_batch"] = (batch, len(test_dataloader))
                         queue.put(info_gui)
@@ -312,7 +312,7 @@ def main(
     epoch_count: int, learning_rate: float, decay_learning_rate: bool, batch_sizes: Tuple[int, int, int], data_split: Tuple[float, float, float], dataset: Dataset, Model: nn.Module,
     filename_model: str, train_existing: bool, save_model_every: int,
     train_model: bool, test_model: bool, visualize_results: bool,
-    Optimizer: torch.optim.Optimizer = torch.optim.SGD, Loss: nn.Module = nn.MSELoss,
+    Optimizer: torch.optim.Optimizer = torch.optim.SGD, loss_function: nn.Module = nn.MSELoss(),
     queue: Queue = None, queue_to_main: Queue = None,
 ):
     """
@@ -330,7 +330,7 @@ def main(
     `filename_model`: Name of the .pth file to load and save to during training.
     `Model`: A Module subclass to instantiate, not an instance of the class.
     `Optimizer`: An Optimizer subclass to instantiate, not an instance of the class.
-    `Loss`: A Module subclass to instantiate, not an instance of the class.
+    `loss_function`: A callable as an instantiated Module subclass.
 
     
     `queue`: A Queue used to send information to the GUI.
@@ -377,11 +377,11 @@ def main(
     print(f"Split {sample_size:,} samples into {train_size:,} training / {validate_size:,} validation / {test_size:,} testing.")
 
     batch_size_train, batch_size_validate, batch_size_test = batch_sizes
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size_train, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size_train, shuffle=True, drop_last=False)
     validate_dataloader = DataLoader(validate_dataset, batch_size=batch_size_validate, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size_test, shuffle=False)
 
-    # Initialize the model, optimizer, and loss function.
+    # Initialize the model and optimizer.
     model = Model(device)
     model.to(device)
     print(f"Using model {type(model).__name__} with {get_parameter_count(model):,} parameters.")
@@ -390,7 +390,6 @@ def main(
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
     else:
         scheduler = None
-    loss_function = Loss()
 
     # Load previously saved model and optimizer parameters.
     if checkpoint is not None:
@@ -453,8 +452,8 @@ def main(
 
             metrics.plot_histograms(outputs, labels, bins=20)
             metrics.plot_predicted_vs_true(outputs, labels)
-            metrics.plot_error_by_angle(outputs, labels, locations_1, locations_2)
-            metrics.plot_error_by_edge_distance(outputs, labels, locations_1, locations_2)
+            # metrics.plot_error_by_angle(outputs, labels, locations_1, locations_2)
+            # metrics.plot_error_by_edge_distance(outputs, labels, locations_1, locations_2)
 
             # # If predicting local strut diameters, visualize the predictions on all struts in a single lattice structure.
             # dataset.p = 1.0
@@ -515,7 +514,7 @@ kwargs = {
     "dataset": LocalStrutDataset(1000, p=0.1),
     "Model": ResNet,
     "Optimizer": torch.optim.Adam,
-    "Loss": nn.MSELoss,
+    "loss_function": nn.MSELoss(),
 }
 
 if __name__ == "__main__":

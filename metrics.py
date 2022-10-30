@@ -6,6 +6,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+def me(p, y):
+    """Mean error."""
+    return np.mean(p - y)
+
 def mae(p, y):
     """Mean absolute error."""
     return np.mean(np.abs(p - y))
@@ -141,6 +145,7 @@ def plot_adjacency(p, y):
 
 def evaluate(p, y) -> Dict[str, float]:
     results = {
+        'ME': me(p, y),
         'MAE': mae(p, y),
         # 'MSE': mse(p, y),
         # 'MAE among nonzeros': mae_nonzeros(p, y),
@@ -148,8 +153,8 @@ def evaluate(p, y) -> Dict[str, float]:
         'Maximum error': max_error(p, y),
         # 'Zeros correct': fraction_of_zeros_correct(p, y),
         # 'Zeros incorrect': fraction_of_zeros_incorrect(p, y),
-        # 'Number out of bounds': ((p < 0) + (p > 1)).sum(),
-        # 'Fraction out of bounds': ((p < 0) + (p > 1)).sum() / p.size,
+        # 'Number of values out of bounds': ((p < 0) + (p > 1)).sum(),
+        # 'Fraction of values out of bounds': ((p < 0) + (p > 1)).sum() / p.size,
     }
     
     return results
