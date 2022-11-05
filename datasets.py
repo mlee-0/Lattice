@@ -37,8 +37,10 @@ class LocalStrutDataset(torch.utils.data.Dataset):
         self.diameters = torch.tensor([output[3] for output in self.outputs])[:, None]
         
         # Normalize input data to have zero mean and unit variance.
-        self.inputs -= self.inputs.mean()
-        self.inputs /= self.inputs.std()
+        self.input_mean = self.inputs.mean()
+        self.inputs -= self.input_mean
+        self.input_std = self.inputs.std()
+        self.inputs /= self.input_std
 
         # # Normzalize label data to have zero mean and unit variance.
         # self.diameter_mean = self.diameters.mean().item()
@@ -172,7 +174,14 @@ class VectorDataset(torch.utils.data.Dataset):
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    dataset = LocalStrutDataset(1000, p=1.0)
+    import numpy as np
+    dataset = LocalStrutDataset(1000, p=0.01)
+    d = dataset.diameters.squeeze().numpy()
+    y = d.copy()
+    y = ((y - y.mean()) * 3) ** 2.1
     plt.figure()
-    plt.hist(dataset.diameters.squeeze().numpy(), bins=25)
+    plt.plot(np.sort(d))
+    plt.plot(np.sort(y))
+    # plt.hist(d, bins=25)
+    # plt.hist(d_, bins=25)
     plt.show()

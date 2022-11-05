@@ -46,22 +46,22 @@ class ResNet(torch.nn.Module):
             BatchNorm3d(c*1),
             ReLU(inplace=True),
         )
-        # self.convolution_4 = Sequential(
-        #     Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-        #     BatchNorm3d(c*1),
-        #     ReLU(inplace=True),
-        # )
-        # self.convolution_5 = Sequential(
-        #     Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-        #     BatchNorm3d(c*1),
-        #     ReLU(inplace=True),
-        # )
+        self.convolution_4 = Sequential(
+            Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*1),
+            ReLU(inplace=True),
+        )
+        self.convolution_5 = Sequential(
+            Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*1),
+            ReLU(inplace=True),
+        )
 
         self.residual_1 = residual(c*1, c*1)
         self.residual_2 = residual(c*1, c*1)
         self.residual_3 = residual(c*1, c*1)
-        # self.residual_4 = residual(c*1, c*1)
-        # self.residual_5 = residual(c*1, c*1)
+        self.residual_4 = residual(c*1, c*1)
+        self.residual_5 = residual(c*1, c*1)
 
         self.pooling = AdaptiveAvgPool3d(output_size=(1, 1, 1))
         self.linear = Linear(in_features=c*1, out_features=1)
@@ -75,63 +75,14 @@ class ResNet(torch.nn.Module):
         x = torch.relu(x + self.residual_2(x))
         x = self.convolution_3(x)
         x = torch.relu(x + self.residual_3(x))
-        # x = self.convolution_4(x)
-        # x = torch.relu(x + self.residual_4(x))
-        # x = self.convolution_5(x)
-        # x = torch.relu(x + self.residual_5(x))
+        x = self.convolution_4(x)
+        x = torch.relu(x + self.residual_4(x))
+        x = self.convolution_5(x)
+        x = torch.relu(x + self.residual_5(x))
 
         x = self.pooling(x)
         x = self.linear(x.view(batch_size, -1))
-        x = torch.sigmoid(x)
-
-        return x
-
-class DenseNet(torch.nn.Module):
-
-    def __init__(self, device: str='cpu') -> None:
-        super().__init__()
-        self.device = device
-
-        input_channels = 2
-
-        # Number of output channels in the first layer.
-        c = 4
-
-        self.convolution_1 = Sequential(
-            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-            BatchNorm3d(c*1),
-            ReLU(inplace=True),
-        )
-        self.convolution_2 = Sequential(
-            Conv3d(in_channels=input_channels+c*1, out_channels=input_channels+c*1, kernel_size=3, stride=1, padding='same'),
-            BatchNorm3d(input_channels+c*1),
-            ReLU(inplace=True),
-        )
-        self.convolution_3 = Sequential(
-            Conv3d(in_channels=(input_channels+c*1)*2, out_channels=(input_channels+c*1)*2, kernel_size=3, stride=1, padding='same'),
-            BatchNorm3d((input_channels+c*1)*2),
-            ReLU(inplace=True),
-        )
-
-        # self.residual_1 = residual(c*1, c*1)
-        # self.residual_2 = residual(c*1, c*1)
-        # self.residual_3 = residual(c*1, c*1)
-
-        self.pooling = AdaptiveAvgPool3d(output_size=(1, 1, 1))
-        self.linear = Linear(in_features=(input_channels+c*1)*2, out_features=1)
-
-    def forward(self, x):
-        batch_size = x.size(0)
-
-        x1 = self.convolution_1(x)
-        x2 = self.convolution_2(torch.cat([x, x1], dim=1))
-        x3 = self.convolution_3(torch.cat([x, x1, x2], dim=1))
-        # x = torch.relu(x + self.residual_1(x))
-        # x = torch.relu(x + self.residual_2(x))
-        # x = torch.relu(x + self.residual_3(x))
-
-        x = self.pooling(x3)
-        x = self.linear(x.view(batch_size, -1))
+        # x = torch.sigmoid(x)
 
         return x
 
@@ -155,8 +106,10 @@ class ResOnly(torch.nn.Module):
         self.residual_1 = residual(c*1, c*1)
         self.residual_2 = residual(c*1, c*1)
         self.residual_3 = residual(c*1, c*1)
-        # self.residual_4 = residual(c*1, c*1)
-        # self.residual_5 = residual(c*1, c*1)
+        self.residual_4 = residual(c*1, c*1)
+        self.residual_5 = residual(c*1, c*1)
+        # self.residual_6 = residual(c*1, c*1)
+        # self.residual_7 = residual(c*1, c*1)
 
         self.pooling = AdaptiveAvgPool3d(output_size=(1, 1, 1))
         self.linear = Linear(in_features=c*1, out_features=1)
@@ -168,8 +121,10 @@ class ResOnly(torch.nn.Module):
         x = torch.relu(x + self.residual_1(x))
         x = torch.relu(x + self.residual_2(x))
         x = torch.relu(x + self.residual_3(x))
-        # x = torch.relu(x + self.residual_4(x))
-        # x = torch.relu(x + self.residual_5(x))
+        x = torch.relu(x + self.residual_4(x))
+        x = torch.relu(x + self.residual_5(x))
+        # x = torch.relu(x + self.residual_6(x))
+        # x = torch.relu(x + self.residual_7(x))
 
         x = self.pooling(x)
         x = self.linear(x.view(batch_size, -1))
@@ -356,3 +311,22 @@ class ResNetVector(torch.nn.Module):
 #         # x = torch.sigmoid(x)
 
 #         return x
+
+# class EdgeConv(torch.nn.Module):
+#     def __init__(self) -> None:
+#         super().__init__()
+
+#         input_channels = 16
+
+#         nn = torch_geometric.nn.MLP([2*input_channels, 8, 4, 1])
+#         self.convolution_1 = torch_geometric.nn.EdgeConv(nn, aggr='mean')
+
+#     def forward(self, edge_index):
+#         x = self.convolution_1(x)
+
+# class CnnGnn(torch.nn.Module):
+#     def __init__(self) -> None:
+#         super().__init__()
+    
+#     def forward(self, density, edge_index):
+#         x = self.convolution_1(density)

@@ -153,8 +153,8 @@ def evaluate(p, y) -> Dict[str, float]:
         'Maximum error': max_error(p, y),
         # 'Zeros correct': fraction_of_zeros_correct(p, y),
         # 'Zeros incorrect': fraction_of_zeros_incorrect(p, y),
-        # 'Number of values out of bounds': ((p < 0) + (p > 1)).sum(),
-        # 'Fraction of values out of bounds': ((p < 0) + (p > 1)).sum() / p.size,
+        'Number of values out of bounds': ((p < 0) + (p > 1)).sum(),
+        'Fraction of values out of bounds': ((p < 0) + (p > 1)).sum() / p.size,
     }
     
     return results

@@ -185,10 +185,9 @@ def train(
                 if queue_to_main and not queue_to_main.empty():
                     break
         
-        print()
         loss /= batch
         validation_loss.append(loss)
-        print(f"Validation loss: {loss:,.2e}")
+        print(f"\nValidation loss: {loss:,.2e}")
 
         # Calculate evaluation metrics on validation results.
         outputs = np.concatenate(outputs, axis=0)
@@ -374,7 +373,7 @@ def main(
     #     generator=torch.Generator().manual_seed(42),
     # )
     sample_size = sum([train_size, validate_size, test_size])
-    print(f"Split {sample_size:,} samples into {train_size:,} training / {validate_size:,} validation / {test_size:,} testing.")
+    print(f"\nSplit {sample_size:,} samples into {train_size:,} training / {validate_size:,} validation / {test_size:,} testing.")
 
     batch_size_train, batch_size_validate, batch_size_test = batch_sizes
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size_train, shuffle=True, drop_last=False)
@@ -501,17 +500,17 @@ kwargs = {
     "test_model": True,
     "visualize_results": True,
 
+    "train_existing": True,
     "filename_model": "model.pth",
-    "train_existing": not True,
     "save_model_every": 1,
 
-    "epoch_count": 5,
-    "learning_rate": 1e-3,
+    "epoch_count": 10,
+    "learning_rate": 1e-4,
     "decay_learning_rate": not True,
     "batch_sizes": (32, 32, 32),
     "data_split": (0.8, 0.1, 0.1),
     
-    "dataset": LocalStrutDataset(1000, p=0.1),
+    "dataset": LocalStrutDataset(1000, p=0.09),
     "Model": ResNet,
     "Optimizer": torch.optim.Adam,
     "loss_function": nn.MSELoss(),
@@ -519,3 +518,66 @@ kwargs = {
 
 if __name__ == "__main__":
     main(**kwargs)
+
+    # # Generate a density matrix.
+    # import numpy as np
+    # from scipy.ndimage import gaussian_filter
+    # import torch
+    # np.random.seed(42)
+    # density = np.random.rand(20, 20, 40)
+    # density = gaussian_filter(density, sigma=2)
+    # density -= density.min()
+    # density /= density.max()
+    # density *= 255
+    # density = torch.tensor(density)
+    # visualize_input(density, opacity=1.0)
+    # print(density.mean())
+
+    # # Generate a lattice structure within the volume.
+    # indices = []
+    # struts = ((1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (0, 1, 1), (1, 0, 1), (1, 1, 1))
+    # for i in range(5, 15):
+    #     for j in range(5, 15):
+    #         for k in range(5, 35):
+    #             for dx, dy, dz in struts:
+    #                 indices.append((i, j, k))  # Node 1 for current strut
+    #                 indices.append((i+dx, j+dy, k+dz))  # Node 2 for current strut
+    # n = len(indices) // 2
+
+    # # Coordinates of node 1 in the input tensor.
+    # x, y, z = 5, 5, 5
+
+    # # Load a previously trained model.
+    # checkpoint = load_model('Training_Data_10/model_5conv_res.pth', 'cpu')
+    # model = ResNet()
+    # model.load_state_dict(checkpoint['model_state_dict'])
+    # model.train(False)
+
+    # # Make diameter predictions.
+    # diameters = []
+    # locations_1 = []
+    # locations_2 = []
+
+    # with torch.no_grad():
+    #     for i, ((x1, y1, z1), (x2, y2, z2)) in enumerate(zip(indices[0::2], indices[1::2]), 1):
+    #         channel_1 = density[None, None, x1-x:x1+x+1, y1-y:y1+y+1, z1-z:z1+z+1]
+    #         # Normalize based on mean and std calculated from the dataset.
+    #         channel_1 -= 127.4493
+    #         channel_1 /= 41.9801
+
+    #         channel_2 = torch.sparse_coo_tensor(
+    #             indices=[(x, x + (x2-x1)), (y, y + (y2-y1)), (z, z + (z2-z1))],
+    #             values=[1, 1],
+    #             size=(11, 11, 11),
+    #         ).to_dense()[None, None, ...]
+    #         input_ = torch.cat([channel_1, channel_2], dim=1).float()
+
+    #         diameter = model(input_)
+    #         if i % 10 == 0:
+    #             print(f"Strut {i}/{n}: diameter {diameter}", end='\r')
+            
+    #         locations_1.append((x1, y1, z1))
+    #         locations_2.append((x2, y2, z2))
+    #         diameters.append(diameter)
+
+    # visualize_lattice(locations_1, locations_2, diameters)

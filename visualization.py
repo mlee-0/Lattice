@@ -24,7 +24,7 @@ def plot_nodes(array: np.ndarray, opacity: float=1.0) -> None:
     plt.show()
 
 def visualize_input(array: np.ndarray, opacity: float=0.5, length: float=1.0, use_lighting: bool=False) -> None:
-    """Start a visualization of a 3D input image."""
+    """Show an interactive visualization window of a 3D input image with values in [0, 255]."""
 
     ren = vtk.vtkRenderer()
     window = vtk.vtkRenderWindow()
@@ -40,8 +40,8 @@ def visualize_input(array: np.ndarray, opacity: float=0.5, length: float=1.0, us
     colors.SetNumberOfComponents(3)
     colors.SetName("colors")
     for x in range(array.shape[0]):
-        for y in range(array.shape[0]):
-            for z in range(array.shape[0]):
+        for y in range(array.shape[1]):
+            for z in range(array.shape[2]):
                 if array[x, y, z] > 0:
                     points.InsertNextPoint(x, y, z)
                     colors.InsertNextTuple([array[x, y, z]] * 3)
@@ -77,7 +77,7 @@ def visualize_input(array: np.ndarray, opacity: float=0.5, length: float=1.0, us
     iren.Start()
 
 def visualize_nodes(array: np.ndarray, opacity: float=1.0) -> None:
-    """Start a visualization a 3D voxel model with white cubes representing nodes."""
+    """Show an interactive visualization window of a 3D voxel model with white cubes representing nodes."""
 
     ren = vtk.vtkRenderer()
     window = vtk.vtkRenderWindow()
@@ -197,7 +197,7 @@ def convert_graph_to_lattice(graph) -> Tuple[list, list, list]:
     return coordinates_1, coordinates_2, diameters
 
 def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float], true_diameters: List[float]=None) -> None:
-    """Start a visualization of a lattice defined as a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters. All lists must be the same length."""
+    """Show an interactive visualization window of a lattice defined as a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters. All lists must be the same length."""
 
     assert len(locations_1) == len(locations_2) == len(diameters)
 
@@ -223,7 +223,7 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         tube = vtk.vtkTubeFilter()
         tube.SetInputData(line.GetOutput())
         tube.SetRadius(radius)
-        tube.SetNumberOfSides(5)
+        tube.SetNumberOfSides(3)
         
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputConnection(tube.GetOutputPort())
@@ -265,11 +265,6 @@ if __name__ == "__main__":
 
     inputs = read_pickle('Training_Data_10/inputs.pickle')
     visualize_input(inputs[0, 0, ...], opacity=1, length=0.9, use_lighting=True)
-    # a = np.zeros([6, 6, 6])
-    # a[2, 2, 2] = 255
-    # a[3, 3, 3] = 255
-    # visualize_input(a, 1)
-
 
     # graphs = read_pickle('Training_Data_10/graphs.pickle')
     # lattice = convert_graph_to_lattice(graphs[0])
