@@ -86,49 +86,75 @@ class ResNet(torch.nn.Module):
 
         return x
 
-class ResOnly(torch.nn.Module):
+class ResNetMasked(torch.nn.Module):
 
     def __init__(self, device: str='cpu') -> None:
         super().__init__()
         self.device = device
 
-        input_channels = 2
+        input_channels = 1
 
         # Number of output channels in the first layer.
         c = 4
 
-        self.convolution = Sequential(
-            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=1, stride=1, padding=0),
+        self.convolution_1 = Sequential(
+            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
             BatchNorm3d(c*1),
             ReLU(inplace=True),
         )
+        self.convolution_2 = Sequential(
+            Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*1),
+            ReLU(inplace=True),
+        )
+        self.convolution_3 = Sequential(
+            Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*1),
+            ReLU(inplace=True),
+        )
+        # self.convolution_4 = Sequential(
+        #     Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+        #     BatchNorm3d(c*1),
+        #     ReLU(inplace=True),
+        # )
+        # self.convolution_5 = Sequential(
+        #     Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+        #     BatchNorm3d(c*1),
+        #     ReLU(inplace=True),
+        # )
 
         self.residual_1 = residual(c*1, c*1)
         self.residual_2 = residual(c*1, c*1)
         self.residual_3 = residual(c*1, c*1)
-        self.residual_4 = residual(c*1, c*1)
-        self.residual_5 = residual(c*1, c*1)
-        # self.residual_6 = residual(c*1, c*1)
-        # self.residual_7 = residual(c*1, c*1)
+        # self.residual_4 = residual(c*1, c*1)
+        # self.residual_5 = residual(c*1, c*1)
 
-        self.pooling = AdaptiveAvgPool3d(output_size=(1, 1, 1))
+        # self.pooling = AdaptiveAvgPool3d(output_size=(1, 1, 1))
         self.linear = Linear(in_features=c*1, out_features=1)
 
-    def forward(self, x):
+    def forward(self, x, coordinates):
         batch_size = x.size(0)
 
-        x = self.convolution(x)
+        x = self.convolution_1(x)
         x = torch.relu(x + self.residual_1(x))
+        x = self.convolution_2(x)
         x = torch.relu(x + self.residual_2(x))
+        x = self.convolution_3(x)
         x = torch.relu(x + self.residual_3(x))
+        x = self.convolution_4(x)
         x = torch.relu(x + self.residual_4(x))
+        x = self.convolution_5(x)
         x = torch.relu(x + self.residual_5(x))
-        # x = torch.relu(x + self.residual_6(x))
-        # x = torch.relu(x + self.residual_7(x))
 
-        x = self.pooling(x)
+        (x1, y1, z1), (x2, y2, z2) = coordinates
+        batch_indices = torch.arange(batch_size)
+        x = (x[batch_indices, :, x1, y1, z1] + x[batch_indices, :, x2, y2, z2]) / 2
+        # x = torch.mean([
+        #     x[batch_indices, :, x1, y1, z1],
+        #     x[batch_indices, :, x2, y2, z2],
+        # ], dim=0)
+        # x = self.pooling(x)
         x = self.linear(x.view(batch_size, -1))
-        x = torch.sigmoid(x)
 
         return x
 
@@ -313,16 +339,35 @@ class ResNetVector(torch.nn.Module):
 #         return x
 
 # class EdgeConv(torch.nn.Module):
-#     def __init__(self) -> None:
+#     def __init__(self, device: str=None) -> None:
 #         super().__init__()
 
-#         input_channels = 16
+#         input_channels = 1
 
-#         nn = torch_geometric.nn.MLP([2*input_channels, 8, 4, 1])
-#         self.convolution_1 = torch_geometric.nn.EdgeConv(nn, aggr='mean')
+#         self.convolution_1 = torch_geometric.nn.EdgeConv(
+#             torch_geometric.nn.MLP([2*input_channels, 4]),
+#             aggr='mean',
+#         )
+#         self.convolution_2 = torch_geometric.nn.EdgeConv(
+#             torch_geometric.nn.MLP([4*2, 1]),
+#             aggr='mean',
+#         )
+#         self.convolution_3 = torch_geometric.nn.EdgeConv(
+#             torch_geometric.nn.MLP([16*2, 1]),
+#             aggr='mean',
+#         )
 
-#     def forward(self, edge_index):
-#         x = self.convolution_1(x)
+#     def forward(self, x, edge_index):
+#         x = self.convolution_1(x, edge_index)
+#         x = self.convolution_2(x, edge_index)
+#         x = self.convolution_3(x, edge_index)
+
+#         # Combine node features for each pair of nodes with resulting shape (number of edges, number of node features).
+#         x = (x[edge_index[0, :], :] + x[edge_index[1, :], :]) / 2
+#         # Combine node features for duplicate edges to reduce the shape to (half the original number of edges, ...).
+#         x = (x[:x.size(0)//2, :] + x[x.size(0)//2:, :]) / 2
+
+#         return x
 
 # class CnnGnn(torch.nn.Module):
 #     def __init__(self) -> None:
