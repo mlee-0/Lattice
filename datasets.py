@@ -12,7 +12,7 @@ import torch
 from preprocessing import DATASET_FOLDER, read_pickle
 
 
-class LocalStrutDataset(torch.utils.data.Dataset):
+class StrutDataset(torch.utils.data.Dataset):
     """Density and node location data as 2-channel 3D tensors and strut diameter data as scalars. The node location channel is a binary array with values {0, 1}.
     
     In this dataset, a single input image corresponds to many struts. Splitting this dataset for training and testing should be done by input image, instead of by strut, in order to ensure that struts corresponding to input images in the training set do not show up in the testing set.
@@ -54,6 +54,12 @@ class LocalStrutDataset(torch.utils.data.Dataset):
     def __len__(self) -> int:
         return len(self.outputs)
 
+    # Use with ResNetMasked
+    # def __getitem__(self, index):
+    #     # Return the coordinates of the two nodes in addition to the inputs and outputs.
+    #     image_index, (x1, y1, z1), (x2, y2, z2), diameter = self.outputs[index]
+    #     return torch.clone(self.inputs[image_index, :1, ...]), ((x1, y1, z1), (x2, y2, z2)), torch.clone(self.diameters[index, :])
+
     def __getitem__(self, index):
         image_index, (x1, y1, z1), (x2, y2, z2), diameter = self.outputs[index]
         self.inputs[image_index, 1, ...] = 0
@@ -89,69 +95,11 @@ class LocalStrutDataset(torch.utils.data.Dataset):
     #     x *= self.diameter_std
     #     x += self.diameter_mean
 
-class AdjacencyDataset(torch.utils.data.Dataset):
-    """Density data as 3D tensors and strut diameter data as 2D tensors resembling adjacency matrices."""
-
-    def __init__(self, count: int=None) -> None:
-        """
-        `count`: The number of data to use, or None to use the entire dataset.
-        """
-
-        time_start = time.time()
-        
-        self.inputs = read_pickle(os.path.join(DATASET_FOLDER, 'inputs.pickle')).float()
-        self.outputs = read_pickle(os.path.join(DATASET_FOLDER, 'outputs_adjacency.pickle')).float()
-        
-        if count is not None:
-            self.inputs = self.inputs[:count, ...]
-            self.outputs = self.outputs[:count, ...]
-
-        assert self.inputs.shape[0] == self.outputs.shape[0]
-
-        # Normalize input data to have zero mean and unit variance.
-        self.inputs[self.inputs >= 0] -= self.inputs[self.inputs >= 0].mean()
-        self.inputs[self.inputs >= 0] /= self.inputs[self.inputs >= 0].std()
-
-        time_end = time.time()
-        print(f"Loaded dataset in {round(time_end - time_start)} seconds.")
-
-    def __len__(self) -> int:
-        return len(self.inputs)
-
-    def __getitem__(self, index):
-        return self.inputs[index, ...], self.outputs[index, ...]
-
-class VectorDataset(torch.utils.data.Dataset):
-    """Density data as 3D tensors and strut diameter data as 1D tensors."""
-
-    def __init__(self, count: int=None) -> None:
-        super().__init__()
-
-        self.inputs = read_pickle(os.path.join(DATASET_FOLDER, 'inputs.pickle')).float()
-        self.outputs = read_pickle(os.path.join(DATASET_FOLDER, 'outputs_vector.pickle'))
-
-        if count is not None:
-            self.inputs = self.inputs[:count, ...]
-            self.outputs = self.outputs[:count, ...]
-        
-        assert self.inputs.shape[0] == self.outputs.shape[0]
-
-        # Normalize input data to have zero mean and unit variance.
-        self.inputs[self.inputs >= 0] -= self.inputs[self.inputs >= 0].mean()
-        self.inputs[self.inputs >= 0] /= self.inputs[self.inputs >= 0].std()
-
-    def __len__(self) -> int:
-        return len(self.inputs)
-
-    def __getitem__(self, index):
-        return self.inputs[index, ...], self.outputs[index, ...]
-
 # class GraphDataset(torch_geometric.data.Dataset):
 #     """Density data and strut diameter data as graphs."""
 
 #     def __init__(self, count: int=None) -> None:
-#         with open(os.path.join(DATASET_FOLDER, 'graphs.pickle'), 'rb') as f:
-#             self.dataset = pickle.load(f)
+#         self.dataset = read_pickle(os.path.join(DATASET_FOLDER, 'graphs.pickle'))
         
 #         if count is not None:
 #             self.dataset = self.dataset[:count]
@@ -175,7 +123,7 @@ class VectorDataset(torch.utils.data.Dataset):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import numpy as np
-    dataset = LocalStrutDataset(1000, p=0.01)
+    dataset = StrutDataset(1000, p=0.01)
     d = dataset.diameters.squeeze().numpy()
     y = d.copy()
     y = ((y - y.mean()) * 3) ** 2.1

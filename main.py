@@ -117,6 +117,7 @@ def train(
                 input_data = input_data.to(device)
                 label_data = label_data.to(device)
                 output_data = model(input_data)
+
                 # Calculate the loss.
                 loss_current = loss_function(output_data, label_data)
                 loss += loss_current.item()
@@ -500,17 +501,17 @@ kwargs = {
     "test_model": True,
     "visualize_results": True,
 
-    "train_existing": True,
+    "train_existing": not True,
     "filename_model": "model.pth",
     "save_model_every": 1,
 
-    "epoch_count": 10,
-    "learning_rate": 1e-4,
+    "epoch_count": 5,
+    "learning_rate": 1e-3,
     "decay_learning_rate": not True,
     "batch_sizes": (32, 32, 32),
     "data_split": (0.8, 0.1, 0.1),
     
-    "dataset": LocalStrutDataset(1000, p=0.09),
+    "dataset": StrutDataset(1000, p=0.09),
     "Model": ResNet,
     "Optimizer": torch.optim.Adam,
     "loss_function": nn.MSELoss(),
