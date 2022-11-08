@@ -535,70 +535,32 @@ if __name__ == "__main__":
     
     main(**kwargs)
 
-    # # Generate a density matrix.
-    # import numpy as np
-    # # from scipy.ndimage import gaussian_filter
-    # import torch
-    # np.random.seed(42)
-    # # density = np.random.rand(20, 20, 40)
-    # # density = gaussian_filter(density, sigma=3)
-    # density = np.ones((20, 20, 40))
-    # density *= np.linspace(0, 1, 40)
-    # density -= density.min()
-    # density /= density.max()
-    # density *= 255
-    # density = torch.tensor(density)
-    # # visualize_input(density, opacity=1.0)
-
-    # dataset = StrutDataset(1000, p=0.1, normalize_inputs=True)
-    # dataset.normalize_inputs(density)
-
-    # # Generate a lattice structure within the volume.
-    # indices = []
-    # struts = ((1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (0, 1, 1), (1, 0, 1), (1, 1, 1))
-    # for i in range(8, 12):
-    #     for j in range(8, 12):
-    #         for k in range(12, 18):
-    #             for dx, dy, dz in struts:
-    #                 if i == 11 and dx > 0 or j == 11 and dy > 0 or k == 17 and dz > 0:
-    #                     continue
-    #                 indices.append((i, j, k))  # Node 1 for current strut
-    #                 indices.append((i+dx, j+dy, k+dz))  # Node 2 for current strut
-    # n = len(indices) // 2
-
-    # # Coordinates of node 1 in the input tensor.
-    # x, y, z = 5, 5, 5
-
-    # # Load a previously trained model.
+    # # Load a trained model.
     # checkpoint = load_model('Training_Data_10/model_5conv_res.pth', 'cpu')
     # model = ResNet()
     # model.load_state_dict(checkpoint['model_state_dict'])
     # model.train(False)
 
+    # batch_size = 443
+    # dataset = TestDataset()
+    # loader = DataLoader(dataset, batch_size=batch_size)
+
     # # Make diameter predictions.
-    # diameters = [0.025] * n
-    # locations_1 = list(indices[0::2])
-    # locations_2 = list(indices[1::2])
+    # diameters = torch.tensor([0.025] * len(dataset))
+    # locations_1 = list([_[0] for _ in dataset.indices])
+    # locations_2 = list([_[1] for _ in dataset.indices])
 
     # # # Visualize the lattice structure before predicting diameters. Intended to show only the shape of the lattice.
     # # visualize_lattice(locations_1, locations_2, diameters)
 
     # tic = time.time()
-    # channel_2 = torch.zeros((11, 11, 11))
     # with torch.no_grad():
-    #     for i, ((x1, y1, z1), (x2, y2, z2)) in enumerate(zip(indices[0::2], indices[1::2]), 1):
-    #         channel_1 = density[x1-x:x1+x+1, y1-y:y1+y+1, z1-z:z1+z+1]
-
-    #         channel_2[:] = 0
-    #         channel_2[x, y, z] = 1
-    #         channel_2[x + (x2-x1), y + (y2-y1), z + (z2-z1)] = 1
-    #         input_ = torch.cat([channel_1[None, None, ...], channel_2[None, None, ...]], dim=1).float()
-
+    #     for i, input_ in enumerate(loader, 1):
     #         diameter = model(input_)
     #         # if i % 10 == 0:
     #         #     print(f"Strut {i}/{n}: diameter {diameter}", end='\r')
             
-    #         diameters[i-1] = diameter
+    #         diameters[(i-1)*batch_size:i*batch_size] = diameter.squeeze()
     #         # if i == 1 or i % 3 == 0:
     #         #     visualize_lattice(locations_1, locations_2, diameters, filename=f"{i:03}")
     # toc = time.time()

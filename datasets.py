@@ -6,6 +6,7 @@ import random
 import time
 from typing import List, Tuple, Union
 
+import numpy as np
 import torch
 # import torch_geometric
 
@@ -169,6 +170,72 @@ class CenteredStrutDataset(torch.utils.data.Dataset):
 #     def __getitem__(self, index):
 #         # Return the entire graph. Returning individual attributes (x, edge_index, y) results in incorrect batching.
 #         return self.dataset[index]
+
+class TestDataset(torch.utils.data.Dataset):
+    """A test dataset for testing the iterative lattice generation process. The strut being predicted is fixed at the center of the density matrix."""
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        # from scipy.ndimage import gaussian_filter
+
+        # Generate a density matrix with linearly varying values.
+        np.random.seed(42)
+        self.density = np.ones((20, 20, 40))
+        self.density *= np.linspace(0, 1, 40) * 255
+
+        # Alternatively, generate a density matrix with random noise.
+        # self.density = np.random.rand(20, 20, 40)
+        # self.density = gaussian_filter(self.density, sigma=3)
+        # self.density -= self.density.min()
+        # self.density /= self.density.max()
+        # self.density *= 255
+
+        # Normalize density values.
+        self.density -= 127.4493
+        self.density /= 41.9801
+        self.density = torch.tensor(self.density)
+        
+        # visualize_input(self.density, opacity=1.0)
+
+        # Generate a lattice structure within the volume, as a list containing pairs of node coordinates.
+        self.indices = []
+        struts = ((1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (0, 1, 1), (1, 0, 1), (1, 1, 1))
+        x = list(range(8, 12))
+        y = list(range(8, 12))
+        z = list(range(12, 18))
+
+        for i in x:
+            for j in y:
+                for k in z:
+                    for dx, dy, dz in struts:
+                        # Prevent adding invalid struts at the edges that are not connected on one end.
+                        if i == x[-1] and dx > 0 or j == y[-1] and dy > 0 or k == z[-1] and dz > 0:
+                            continue
+
+                        self.indices.append((
+                            (i, j, k),  # Node 1 for current strut
+                            (i+dx, j+dy, k+dz),  # Node 2 for current strut
+                        ))
+        
+        # Initialize the second channel, which contains the locations of the two nodes that form a strut.
+        self.channel_2 = torch.zeros((11, 11, 11))
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, index):
+        # Coordinates of node 1.
+        x, y, z = 5, 5, 5
+
+        (x1, y1, z1), (x2, y2, z2) = self.indices[index]
+        channel_1 = self.density[x1-x:x1+x+1, y1-y:y1+y+1, z1-z:z1+z+1]
+
+        self.channel_2[:] = 0
+        self.channel_2[x, y, z] = 1
+        self.channel_2[x + (x2-x1), y + (y2-y1), z + (z2-z1)] = 1
+
+        return torch.cat([channel_1[None, ...], self.channel_2[None, ...]], dim=0).float()
 
 
 if __name__ == '__main__':

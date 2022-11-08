@@ -65,16 +65,6 @@ class ResNet(Module):
         self.pooling = AdaptiveAvgPool3d(output_size=(1, 1, 1))
         self.linear = Linear(in_features=c*1, out_features=1)
 
-        # # Set certain weights to 0.
-        # with torch.no_grad():
-        #     self.convolution_2.get_parameter('0.weight')[..., 1, 1, 1] = 0
-        #     self.convolution_3.get_parameter('0.weight')[..., 1, 1, 1] = 0
-        #     self.convolution_4.get_parameter('0.weight')[..., 1, 1, 1] = 0
-        #     self.convolution_5.get_parameter('0.weight')[..., 1, 1, 1] = 0
-        #     for layer in [self.residual_1, self.residual_2, self.residual_3, self.residual_4, self.residual_5]:
-        #         layer.get_parameter('0.weight')[..., 1, 1, 1] = 0
-        #         layer.get_parameter('2.weight')[..., 1, 1, 1] = 0
-
     def forward(self, x):
         batch_size = x.size(0)
 
