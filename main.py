@@ -211,6 +211,15 @@ def train(
                 validation_loss = [*previous_validation_loss, *validation_loss],
             )
         
+        # # Show weights as a 3D cube, if training MLP
+        # if epoch % 50 == 0:
+        #     with torch.no_grad():
+        #         w = torch.clone(model.get_parameter('linear.0.weight')).view((11, 11, 11))
+        #         w -= w.min()
+        #         w /= w.max()
+        #         w *= 255
+        #         visualize_input(w[:6, :, :], opacity=1)
+
         # Show the elapsed time during the epoch.
         time_end = time.time()
         duration = time_end - time_start
@@ -356,33 +365,41 @@ def main(
     else:
         checkpoint = None
 
-    # Split the dataset into training, validation, and testing datasets. If using the individual strut diameters dataset, split by input image instead of by struts to ensure that data from input images in the training set do not appear in the validation or testing sets.
-    train_image_indices, validate_image_indices, test_image_indices = dataset.split_inputs(*data_split)
-    train_indices = dataset.get_indices_for_images(train_image_indices)
-    validate_indices = dataset.get_indices_for_images(validate_image_indices)
-    test_indices = dataset.get_indices_for_images(test_image_indices)
+    # Split the dataset into training, validation, and testing datasets. Split by input image instead of by struts to ensure that input images in the training set do not appear in the validation or testing sets.
+    image_indices = list(range(dataset.inputs.size(0)))
+    random.shuffle(image_indices)
+
+    train_size, validate_size, test_size = [int(split * dataset.inputs.size(0)) for split in data_split]
+    train_image_indices = image_indices[:train_size]
+    validate_image_indices = image_indices[train_size:train_size+validate_size]
+    test_image_indices = image_indices[-test_size:]
+
+    train_indices = dataset.outputs_for_images(train_image_indices)
+    validate_indices = dataset.outputs_for_images(validate_image_indices)
+    test_indices = dataset.outputs_for_images(test_image_indices)
 
     train_dataset = Subset(dataset, train_indices)
     validate_dataset = Subset(dataset, validate_indices)
     test_dataset = Subset(dataset, test_indices)
     train_size, validate_size, test_size = len(train_dataset), len(validate_dataset), len(test_dataset)
-    # sample_size = len(dataset)
-    # train_size, validate_size, test_size = [int(split * sample_size) for split in data_split]
+    dataset_size = sum([train_size, validate_size, test_size])
+
+    # dataset_size = len(dataset)
+    # train_size, validate_size, test_size = [int(split * dataset_size) for split in data_split]
     # train_dataset, validate_dataset, test_dataset = torch.utils.data.random_split(
     #     dataset,
     #     [train_size, validate_size, test_size],
     #     generator=torch.Generator().manual_seed(42),
     # )
-    sample_size = sum([train_size, validate_size, test_size])
-    print(f"\nSplit {sample_size:,} samples into {train_size:,} training / {validate_size:,} validation / {test_size:,} testing.")
 
-    batch_size_train, batch_size_validate, batch_size_test = batch_sizes
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size_train, shuffle=True, drop_last=False)
-    validate_dataloader = DataLoader(validate_dataset, batch_size=batch_size_validate, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size_test, shuffle=False)
+    print(f"\nSplit {dataset_size:,} samples into {train_size:,} training / {validate_size:,} validation / {test_size:,} testing.")
+
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_sizes[0], shuffle=True, drop_last=False)
+    validate_dataloader = DataLoader(validate_dataset, batch_size=batch_sizes[1], shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_sizes[2], shuffle=False)
 
     # Initialize the model and optimizer.
-    model = Model(device)
+    model = Model()
     model.to(device)
     print(f"Using model {type(model).__name__} with {get_parameter_count(model):,} parameters.")
     optimizer = Optimizer(model.parameters(), lr=learning_rate)
@@ -435,9 +452,6 @@ def main(
         labels = np.concatenate(labels, axis=0)
         inputs = np.concatenate(inputs, axis=0)
 
-        # # Restore range of values for labels and predictions.
-        # dataset.unnormalize(outputs)
-        # dataset.unnormalize(labels)
         results = evaluate(outputs, labels, inputs, dataset, queue=queue, info_gui=info_gui)
 
         if visualize_results:
@@ -457,7 +471,7 @@ def main(
 
             # # If predicting local strut diameters, visualize the predictions on all struts in a single lattice structure.
             # dataset.p = 1.0
-            # indices = dataset.get_indices_for_images([test_image_indices[0]])
+            # indices = dataset.outputs_for_images([test_image_indices[0]])
             # loader = DataLoader(Subset(dataset, indices), batch_size=1, shuffle=False)
             # outputs, labels, inputs = test(
             #     device = device,
@@ -496,51 +510,58 @@ def main(
             # visualize_lattice(*lattice, [_.item() for _ in graph.y])
 
 
-kwargs = {
-    "train_model": True,
-    "test_model": True,
-    "visualize_results": True,
-
-    "train_existing": not True,
-    "filename_model": "model.pth",
-    "save_model_every": 1,
-
-    "epoch_count": 5,
-    "learning_rate": 1e-3,
-    "decay_learning_rate": not True,
-    "batch_sizes": (32, 32, 32),
-    "data_split": (0.8, 0.1, 0.1),
-    
-    "dataset": StrutDataset(1000, p=0.09),
-    "Model": ResNet,
-    "Optimizer": torch.optim.Adam,
-    "loss_function": nn.MSELoss(),
-}
-
 if __name__ == "__main__":
+    kwargs = {
+        "train_model": True,
+        "test_model": True,
+        "visualize_results": True,
+
+        "train_existing": True,
+        "filename_model": "model_5conv_res.pth",
+        "save_model_every": 1,
+
+        "epoch_count": 1,
+        "learning_rate": 1e-3,
+        "decay_learning_rate": not True,
+        "batch_sizes": (32, 32, 32),
+        "data_split": (0.8, 0.1, 0.1),
+        
+        "dataset": StrutDataset(1000, p=0.1, normalize_inputs=True),
+        # "dataset": CenteredStrutDataset(normalize_inputs=False),
+        "Model": ResNet,
+        "Optimizer": torch.optim.Adam,
+        "loss_function": nn.MSELoss(),
+    }
+    
     main(**kwargs)
 
     # # Generate a density matrix.
     # import numpy as np
-    # from scipy.ndimage import gaussian_filter
+    # # from scipy.ndimage import gaussian_filter
     # import torch
     # np.random.seed(42)
-    # density = np.random.rand(20, 20, 40)
-    # density = gaussian_filter(density, sigma=2)
+    # # density = np.random.rand(20, 20, 40)
+    # # density = gaussian_filter(density, sigma=3)
+    # density = np.ones((20, 20, 40))
+    # density *= np.linspace(0, 1, 40)
     # density -= density.min()
     # density /= density.max()
     # density *= 255
     # density = torch.tensor(density)
-    # visualize_input(density, opacity=1.0)
-    # print(density.mean())
+    # # visualize_input(density, opacity=1.0)
+
+    # dataset = StrutDataset(1000, p=0.1, normalize_inputs=True)
+    # dataset.normalize_inputs(density)
 
     # # Generate a lattice structure within the volume.
     # indices = []
     # struts = ((1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (0, 1, 1), (1, 0, 1), (1, 1, 1))
-    # for i in range(5, 15):
-    #     for j in range(5, 15):
-    #         for k in range(5, 35):
+    # for i in range(8, 12):
+    #     for j in range(8, 12):
+    #         for k in range(12, 18):
     #             for dx, dy, dz in struts:
+    #                 if i == 11 and dx > 0 or j == 11 and dy > 0 or k == 17 and dz > 0:
+    #                     continue
     #                 indices.append((i, j, k))  # Node 1 for current strut
     #                 indices.append((i+dx, j+dy, k+dz))  # Node 2 for current strut
     # n = len(indices) // 2
@@ -555,30 +576,32 @@ if __name__ == "__main__":
     # model.train(False)
 
     # # Make diameter predictions.
-    # diameters = []
-    # locations_1 = []
-    # locations_2 = []
+    # diameters = [0.025] * n
+    # locations_1 = list(indices[0::2])
+    # locations_2 = list(indices[1::2])
 
+    # # # Visualize the lattice structure before predicting diameters. Intended to show only the shape of the lattice.
+    # # visualize_lattice(locations_1, locations_2, diameters)
+
+    # tic = time.time()
+    # channel_2 = torch.zeros((11, 11, 11))
     # with torch.no_grad():
     #     for i, ((x1, y1, z1), (x2, y2, z2)) in enumerate(zip(indices[0::2], indices[1::2]), 1):
-    #         channel_1 = density[None, None, x1-x:x1+x+1, y1-y:y1+y+1, z1-z:z1+z+1]
-    #         # Normalize based on mean and std calculated from the dataset.
-    #         channel_1 -= 127.4493
-    #         channel_1 /= 41.9801
+    #         channel_1 = density[x1-x:x1+x+1, y1-y:y1+y+1, z1-z:z1+z+1]
 
-    #         channel_2 = torch.sparse_coo_tensor(
-    #             indices=[(x, x + (x2-x1)), (y, y + (y2-y1)), (z, z + (z2-z1))],
-    #             values=[1, 1],
-    #             size=(11, 11, 11),
-    #         ).to_dense()[None, None, ...]
-    #         input_ = torch.cat([channel_1, channel_2], dim=1).float()
+    #         channel_2[:] = 0
+    #         channel_2[x, y, z] = 1
+    #         channel_2[x + (x2-x1), y + (y2-y1), z + (z2-z1)] = 1
+    #         input_ = torch.cat([channel_1[None, None, ...], channel_2[None, None, ...]], dim=1).float()
 
     #         diameter = model(input_)
-    #         if i % 10 == 0:
-    #             print(f"Strut {i}/{n}: diameter {diameter}", end='\r')
+    #         # if i % 10 == 0:
+    #         #     print(f"Strut {i}/{n}: diameter {diameter}", end='\r')
             
-    #         locations_1.append((x1, y1, z1))
-    #         locations_2.append((x2, y2, z2))
-    #         diameters.append(diameter)
-
+    #         diameters[i-1] = diameter
+    #         # if i == 1 or i % 3 == 0:
+    #         #     visualize_lattice(locations_1, locations_2, diameters, filename=f"{i:03}")
+    # toc = time.time()
+    # print(toc - tic)
+    
     # visualize_lattice(locations_1, locations_2, diameters)
