@@ -468,6 +468,7 @@ def main(
             metrics.plot_predicted_vs_true(outputs, labels)
             # metrics.plot_error_by_angle(outputs, labels, locations_1, locations_2)
             # metrics.plot_error_by_edge_distance(outputs, labels, locations_1, locations_2)
+            # metrics.plot_error_by_xy_edge_distance(outputs, labels, locations_1, locations_2)
 
             # # If predicting local strut diameters, visualize the predictions on all struts in a single lattice structure.
             # dataset.p = 1.0

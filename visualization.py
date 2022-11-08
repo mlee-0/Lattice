@@ -266,11 +266,15 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
 
 
 if __name__ == "__main__":
+    # inputs = read_pickle('Training_Data_10/inputs.pickle')
+    # visualize_input(inputs[0, 0, ...], opacity=1, length=1.0, use_lighting=not True)
+
     # lattice = convert_output_to_lattice(read_outputs(3)[2])
     # visualize_lattice(*lattice)
 
-    # inputs = read_pickle('Training_Data_10/inputs.pickle')
-    # visualize_input(inputs[5, 0, ...], opacity=1, length=1.0, use_lighting=not True)
+    # graphs = read_pickle('Training_Data_10/graphs.pickle')
+    # lattice = convert_graph_to_lattice(graphs[0])
+    # visualize_lattice(*lattice)
 
     # Test the difference in pixel values between PNG and JPG. Create an image with random noise and save as both PNG and JPG.
     import numpy as np
@@ -290,11 +294,3 @@ if __name__ == "__main__":
     
     d = np.abs(png - jpg) / 255
     print(f"Difference: {np.mean(d):.3f} (average), {np.min(d):.3f} (min), {np.max(d):.3f} (max)")
-
-    # graphs = read_pickle('Training_Data_10/graphs.pickle')
-    # lattice = convert_graph_to_lattice(graphs[0])
-    # visualize_lattice(*lattice)
-    
-    # with open("Training_Data_10/inputs.pickle", 'rb') as f:
-    #     array = pickle.load(f)
-    # visualize_input(array[0, 0, ...], opacity=1.0)

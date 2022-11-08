@@ -65,7 +65,7 @@ def plot_predicted_vs_true(p, y):
     plt.show()
 
 def plot_error_by_edge_distance(p, y, locations_1: List[Tuple[int, int, int]], locations_2: List[Tuple[int, int, int]]):
-    """Plot the errors vs. distances from the edges. Intended to reveal where in the 3D volume predictions are inaccurate."""
+    """Plot the absolute errors vs. distances from the edges. Intended to reveal where in the 3D volume predictions are inaccurate."""
 
     p, y = p.flatten(), y.flatten()
     
@@ -77,7 +77,7 @@ def plot_error_by_edge_distance(p, y, locations_1: List[Tuple[int, int, int]], l
         [distance(x, y, z) for x, y, z in locations_2],
     ], axis=0)
 
-    error = (p - y).squeeze()
+    error = np.abs(p - y).squeeze()
     unique_distances = np.unique(distances)
 
     plt.figure()
@@ -88,12 +88,40 @@ def plot_error_by_edge_distance(p, y, locations_1: List[Tuple[int, int, int]], l
         showextrema=False,
     )
     plt.xlabel('Edge Distance')
-    plt.ylabel('Error')
-    plt.title(f'Errors By Edge Distance ({p.size} data)')
+    plt.ylabel('Absolute Error')
+    plt.title(f'({p.size} data)')
+    plt.show()
+
+def plot_error_by_xy_edge_distance(p, y, locations_1: List[Tuple[int, int, int]], locations_2: List[Tuple[int, int, int]]):
+    """Plot the absolute errors vs. distances from the x=0 and y=0 edges. To verify if a cropping issue in the density images is affecting predictions."""
+
+    p, y = p.flatten(), y.flatten()
+    
+    # Calculate the distance of each node as the perpendicular distance to the nearest edge. Calculate the distance of each strut as the average of its two nodes' distance.
+    h = w = d = 11
+    distance = lambda x, y, z: min([x - 0, y - 0])
+    distances = np.mean([
+        [distance(x, y, z) for x, y, z in locations_1],
+        [distance(x, y, z) for x, y, z in locations_2],
+    ], axis=0)
+
+    error = np.abs(p - y).squeeze()
+    unique_distances = np.unique(distances)
+
+    plt.figure()
+    plt.violinplot(
+        [error[distances == d] for d in unique_distances],
+        positions=unique_distances,
+        showmeans=True,
+        showextrema=False,
+    )
+    plt.xlabel('XY Edge Distance')
+    plt.ylabel('Absolute Error')
+    plt.title(f'({p.size} data)')
     plt.show()
 
 def plot_error_by_angle(p, y, locations_1: List[Tuple[int, int, int]], locations_2: List[Tuple[int, int, int]]):
-    """Plot the errors vs. strut angles."""
+    """Plot the absolute errors vs. strut angles."""
     angles = [
         (1, 0, 0),
         (0, 1, 0),
@@ -108,7 +136,7 @@ def plot_error_by_angle(p, y, locations_1: List[Tuple[int, int, int]], locations
         for (x1,y1,z1), (x2,y2,z2) in zip(locations_1, locations_2)
     ])
 
-    error = (p - y).squeeze()
+    error = np.abs(p - y).squeeze()
     unique_angle_indices = np.unique(angle_indices)
 
     plt.figure()
@@ -119,7 +147,7 @@ def plot_error_by_angle(p, y, locations_1: List[Tuple[int, int, int]], locations
         showextrema=False,
     )
     plt.xticks(range(len(angles)), labels=[str(_) for _ in angles])
-    plt.ylabel('Error')
+    plt.ylabel('Absolute Error')
     plt.title(f'Errors By Angle ({p.size} data)')
     plt.show()
 
