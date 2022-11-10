@@ -11,6 +11,7 @@ import torch
 # import torch_geometric
 
 from preprocessing import DATASET_FOLDER, read_pickle
+from visualization import *
 
 
 class StrutDataset(torch.utils.data.Dataset):
@@ -174,50 +175,110 @@ class CenteredStrutDataset(torch.utils.data.Dataset):
 class TestDataset(torch.utils.data.Dataset):
     """A test dataset for testing the iterative lattice generation process. The strut being predicted is fixed at the center of the density matrix."""
 
-    def __init__(self) -> None:
+    def __init__(self, shape: str) -> None:
         super().__init__()
+        assert shape in ('rectangle', 'circle')
 
         # from scipy.ndimage import gaussian_filter
 
-        # Generate a density matrix with linearly varying values.
-        np.random.seed(42)
-        self.density = np.ones((20, 20, 40))
-        self.density *= np.linspace(0, 1, 40) * 255
+        # Shape of density matrix.
+        h, w, d = 40, 40, 40
+
+        # # Generate a density matrix with linearly varying values.
+        # self.density = np.ones((h, w, d))
+        # self.density *= np.concatenate([
+        #     np.zeros(d//8),
+        #     np.linspace(0, 1, 3*d//4),
+        #     np.ones(d//8),
+        # ]) * 255
+        
+        # Alternatively, generate a density matrix with sinusoidally varying values.
+        self.density = np.ones((h, w, d))
+        self.density *= (np.cos(np.linspace(0, 2*np.pi, d)) * 0.5 + 0.5) * 255
 
         # Alternatively, generate a density matrix with random noise.
-        # self.density = np.random.rand(20, 20, 40)
+        # np.random.seed(42)
+        # self.density = np.random.rand(h, w, d)
         # self.density = gaussian_filter(self.density, sigma=3)
         # self.density -= self.density.min()
         # self.density /= self.density.max()
         # self.density *= 255
 
+        # visualize_input(self.density, opacity=1.0)
+
         # Normalize density values.
         self.density -= 127.4493
         self.density /= 41.9801
         self.density = torch.tensor(self.density)
-        
-        # visualize_input(self.density, opacity=1.0)
 
         # Generate a lattice structure within the volume, as a list containing pairs of node coordinates.
         self.indices = []
-        struts = ((1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (0, 1, 1), (1, 0, 1), (1, 1, 1))
-        x = list(range(8, 12))
-        y = list(range(8, 12))
-        z = list(range(12, 18))
 
-        for i in x:
-            for j in y:
-                for k in z:
-                    for dx, dy, dz in struts:
-                        # Prevent adding invalid struts at the edges that are not connected on one end.
-                        if i == x[-1] and dx > 0 or j == y[-1] and dy > 0 or k == z[-1] and dz > 0:
-                            continue
+        if shape == 'rectangle':
+            # List of struts to add at each node.
+            struts = ((1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (0, 1, 1), (1, 0, 1), (1, 1, 1))
+            X = list(range(5, 15))
+            Y = list(range(5, 15))
+            Z = list(range(5, 35))
 
-                        self.indices.append((
-                            (i, j, k),  # Node 1 for current strut
-                            (i+dx, j+dy, k+dz),  # Node 2 for current strut
-                        ))
+            for x in X:
+                for y in Y:
+                    for z in Z:
+                        for dx, dy, dz in struts:
+                            # Prevent adding invalid struts at the edges that are not connected on one end.
+                            if x == X[-1] and dx > 0 or y == Y[-1] and dy > 0 or z == Z[-1] and dz > 0:
+                                continue
+
+                            self.indices.append((
+                                (x, y, z),  # Node 1 for current strut
+                                (x+dx, y+dy, z+dz),  # Node 2 for current strut
+                            ))
         
+        elif shape == 'circle':
+            radius = 10
+            theta = np.linspace(0, 360, 500) * (np.pi / 180)
+            X = np.round(radius * np.cos(theta)).astype(int)
+            Y = np.round(radius * np.sin(theta)).astype(int)
+            # Delete horizontal/vertical struts that should instead be diagonal struts, to make the overall appearance more curved by introducing diagonal struts.
+            outside_radius = np.sqrt(X ** 2 + Y ** 2) > radius
+            X = X[outside_radius]
+            Y = Y[outside_radius]
+            # https://stackoverflow.com/questions/15637336/numpy-unique-with-order-preserved
+            XY, index = np.unique(np.array([X, Y]), axis=1, return_index=True)
+            XY = XY[:, np.argsort(index)]
+            # Ensure the last node connects to the first.
+            XY = np.append(XY, XY[:, :1], axis=1)
+            # Center the X and Y coordinates within the range instead of at the origin.
+            XY[0, :] += (h//2)
+            XY[1, :] += (w//2)
+
+            Z = list(range(5, 35))
+
+            for z in Z:
+                for i in range(XY.shape[1] - 1):
+                    x1, y1 = XY[:, i]
+                    x2, y2 = XY[:, i+1]
+                    self.indices.append((
+                        (x1, y1, z),
+                        (x2, y2, z),
+                    ))
+
+                    if z != Z[-1]:
+                        self.indices.append((
+                            (x1, y1, z),
+                            (x1, y1, z+1),
+                        ))
+                
+                # Add horizontal/vertical struts inside the circle.
+                for x in range(h):
+                    for y in range(w):
+                        if np.sqrt((x-h/2) ** 2 + (y-w/2) ** 2) <= radius:
+                            node_1 = (x, y, z)
+                            for node_2 in [(x+1, y, z), (x-1, y, z), (x, y+1, z), (x, y-1, z)]:
+                                if np.sqrt((node_2[0]-h/2) ** 2 + (node_2[1]-w/2) ** 2) <= radius:
+                                    if (node_1, node_2) not in self.indices and (node_2, node_1) not in self.indices:
+                                        self.indices.append((node_1, node_2))
+
         # Initialize the second channel, which contains the locations of the two nodes that form a strut.
         self.channel_2 = torch.zeros((11, 11, 11))
 
@@ -239,15 +300,4 @@ class TestDataset(torch.utils.data.Dataset):
 
 
 if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    import numpy as np
-    dataset = StrutDataset(1000, p=0.01)
-    d = dataset.diameters.squeeze().numpy()
-    y = d.copy()
-    y = ((y - y.mean()) * 3) ** 2.1
-    plt.figure()
-    plt.plot(np.sort(d))
-    plt.plot(np.sort(y))
-    # plt.hist(d, bins=25)
-    # plt.hist(d_, bins=25)
-    plt.show()
+    dataset = TestDataset('circle')

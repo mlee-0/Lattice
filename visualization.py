@@ -1,6 +1,9 @@
+import sys
+
 import matplotlib.pyplot as plt
-# import networkx as nx
 import numpy as np
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import *
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor  # type: ignore
 
@@ -196,17 +199,24 @@ def convert_graph_to_lattice(graph) -> Tuple[list, list, list]:
 
     return coordinates_1, coordinates_2, diameters
 
-def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float], true_diameters: List[float]=None, screenshot_filename: str=None) -> None:
+def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float], true_diameters: List[float]=None, screenshot_filename: str=None, gui: bool=False) -> None:
     """Show an interactive visualization window of a lattice defined as a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters. All lists must be the same length."""
 
     assert len(locations_1) == len(locations_2) == len(diameters)
 
-    ren = vtk.vtkRenderer()
-    window = vtk.vtkRenderWindow()
-    window.AddRenderer(ren)
-    iren = vtk.vtkRenderWindowInteractor()
-    iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
-    iren.SetRenderWindow(window)
+    if gui:
+        application = QApplication(sys.argv)
+        gui = VisualizationWindow()
+        ren = gui.ren
+        window = gui.renwin
+    else:
+        ren = vtk.vtkRenderer()
+        window = vtk.vtkRenderWindow()
+        window.SetSize(600, 600)
+        window.AddRenderer(ren)
+        iren = vtk.vtkRenderWindowInteractor()
+        iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
+        iren.SetRenderWindow(window)
 
     if true_diameters is not None:
         # The error value corresponding to red.
@@ -243,15 +253,21 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
 
         ren.AddActor(actor)
     
-    ren.GetActiveCamera().SetParallelProjection(True)
-    ren.ResetCamera()
-    ren.GetActiveCamera().Azimuth(45)
-    ren.GetActiveCamera().Elevation(45)
-    iren.Initialize()
-    window.Render()
-    iren.Start()
-
-    # Save the window as a PNG image.
+    if gui:
+        ren.ResetCamera()
+        window.Render()
+        gui.show()
+        sys.exit(application.exec_())
+    else:
+        ren.GetActiveCamera().SetParallelProjection(True)
+        ren.ResetCamera()
+        ren.GetActiveCamera().Azimuth(45)
+        ren.GetActiveCamera().Elevation(45)
+        iren.Initialize()
+        window.Render()
+        iren.Start()
+    
+    # Save the window as a PNG image. Must have a visualization running.
     if screenshot_filename is not None:
         filter = vtk.vtkWindowToImageFilter()
         filter.SetInput(window)
@@ -260,9 +276,85 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         filter.Update()
 
         writer = vtk.vtkPNGWriter()
-        writer.SetFileName(os.path.join('Screenshots', str(screenshot_filename)))
+        writer.SetFileName(os.path.join('Screenshots', str(screenshot_filename) + '.png'))
         writer.SetInputConnection(filter.GetOutputPort())
         writer.Write()
+
+
+class VisualizationWindow(QMainWindow):
+    """An GUI with an interactive visualizer and a sidebar with camera controls."""
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.setCentralWidget(widget)
+
+        layout.addWidget(self._sidebar())
+        layout.addWidget(self._visualizer())
+
+        # Start the interactor after the layout is created.
+        self.iren.Initialize()
+        self.iren.Start()
+        self.ren.GetActiveCamera().Azimuth(45)
+        self.ren.GetActiveCamera().Elevation(45)
+    
+    def _sidebar(self) -> QWidget:
+        sidebar = QWidget()
+        main_layout = QFormLayout(sidebar)
+        main_layout.setAlignment(Qt.AlignTop)
+
+        layout = QHBoxLayout()
+        self.button_decrease_azimuth = QPushButton('−')
+        self.button_decrease_azimuth.clicked.connect(self.azimuth)
+        self.button_increase_azimuth = QPushButton('+')
+        self.button_increase_azimuth.clicked.connect(self.azimuth)
+        layout.addWidget(self.button_decrease_azimuth)
+        layout.addWidget(self.button_increase_azimuth)
+        main_layout.addRow('Azimuth', layout)
+        
+        layout = QHBoxLayout()
+        self.button_decrease_elevation = QPushButton('−')
+        self.button_decrease_elevation.clicked.connect(self.elevation)
+        self.button_increase_elevation = QPushButton('+')
+        self.button_increase_elevation.clicked.connect(self.elevation)
+        layout.addWidget(self.button_decrease_elevation)
+        layout.addWidget(self.button_increase_elevation)
+        main_layout.addRow('Elevation', layout)
+
+        return sidebar
+
+    def _visualizer(self) -> QWidget:
+        self.ren = vtk.vtkRenderer()
+        widget = QVTKRenderWindowInteractor(self)
+        self.renwin = widget.GetRenderWindow()
+        self.renwin.AddRenderer(self.ren)
+        self.iren = self.renwin.GetInteractor()
+        self.iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
+        self.ren.GetActiveCamera().SetParallelProjection(True)
+        self.ren.GetActiveCamera().SetClippingRange(0.01, 1000)
+
+        return widget
+    
+    def azimuth(self):
+        camera = self.ren.GetActiveCamera()
+        if self.sender() is self.button_decrease_azimuth:
+            camera.Azimuth(-5)
+        elif self.sender() is self.button_increase_azimuth:
+            camera.Azimuth(+5)
+
+        self.iren.Render()
+    
+    def elevation(self):
+        camera = self.ren.GetActiveCamera()
+        if self.sender() is self.button_decrease_elevation:
+            camera.Elevation(-10)
+        if self.sender() is self.button_increase_elevation:
+            camera.Elevation(+10)
+
+        self.iren.Render()
 
 
 if __name__ == "__main__":

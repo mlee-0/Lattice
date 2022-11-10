@@ -542,29 +542,29 @@ if __name__ == "__main__":
     # model.load_state_dict(checkpoint['model_state_dict'])
     # model.train(False)
 
-    # batch_size = 443
-    # dataset = TestDataset()
+    # batch_size = 1
+    # dataset = TestDataset('circle')
     # loader = DataLoader(dataset, batch_size=batch_size)
+    # print(f"{len(dataset)} struts")
 
     # # Make diameter predictions.
-    # diameters = torch.tensor([0.025] * len(dataset))
+    # diameters = torch.tensor([0.05] * len(dataset))
     # locations_1 = list([_[0] for _ in dataset.indices])
     # locations_2 = list([_[1] for _ in dataset.indices])
 
-    # # # Visualize the lattice structure before predicting diameters. Intended to show only the shape of the lattice.
-    # # visualize_lattice(locations_1, locations_2, diameters)
+    # # Visualize the lattice structure before predicting diameters. Intended to show only the shape of the lattice.
+    # # visualize_lattice(locations_1, locations_2, diameters, screenshot_filename=f"{0:03}")
 
     # tic = time.time()
     # with torch.no_grad():
     #     for i, input_ in enumerate(loader, 1):
     #         diameter = model(input_)
     #         # if i % 10 == 0:
-    #         #     print(f"Strut {i}/{n}: diameter {diameter}", end='\r')
-            
+    #         #     print(f"Strut {i}/{n}: diameter {diameter}", end='\r')            
     #         diameters[(i-1)*batch_size:i*batch_size] = diameter.squeeze()
-    #         # if i == 1 or i % 3 == 0:
-    #         #     visualize_lattice(locations_1, locations_2, diameters, filename=f"{i:03}")
+
+    #         # visualize_lattice(locations_1, locations_2, diameters, screenshot_filename=f"{i:03}")
     # toc = time.time()
     # print(toc - tic)
     
-    # visualize_lattice(locations_1, locations_2, diameters)
+    # visualize_lattice(locations_1, locations_2, diameters, gui=True)
