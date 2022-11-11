@@ -3,6 +3,7 @@
 
 import copy
 import glob
+import math
 import os
 import pickle
 from typing import Any, List, Tuple
@@ -176,9 +177,9 @@ def make_struts(length: int, shape: Tuple[int, int, int]) -> List[Tuple[tuple, t
     # Shift struts to be centered at within the volume to maximize symmetry within the volume. If a strut is not centered, density values from one side of a strut will be used more than from the opposite side.
     struts = []
     for i, (x, y, z) in enumerate(directions):
-        offset_x = (np.ceil(h/2) - 1) - x//2
-        offset_y = (np.ceil(w/2) - 1) - y//2
-        offset_z = (np.ceil(d/2) - 1) - z//2
+        offset_x = (math.ceil(h/2) - 1) - x//2
+        offset_y = (math.ceil(w/2) - 1) - y//2
+        offset_z = (math.ceil(d/2) - 1) - z//2
         struts.append((
             (0 + offset_x, 0 + offset_y, 0 + offset_z),
             (x + offset_x, y + offset_y, z + offset_z),
