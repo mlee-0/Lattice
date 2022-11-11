@@ -11,6 +11,96 @@ from datasets import *
 from preprocessing import *
 
 
+class VisualizationWindow(QMainWindow):
+    """An GUI with an interactive visualizer and a sidebar with camera controls."""
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.setCentralWidget(widget)
+
+        layout.addWidget(self._sidebar())
+        layout.addWidget(self._visualizer())
+
+        # Start the interactor after the layout is created.
+        self.iren.Initialize()
+        self.iren.Start()
+        self.reset()
+
+    def _sidebar(self) -> QWidget:
+        sidebar = QWidget()
+        main_layout = QFormLayout(sidebar)
+        main_layout.setAlignment(Qt.AlignTop)
+
+        button_reset = QPushButton('Reset')
+        button_reset.clicked.connect(self.reset)
+        main_layout.addRow(button_reset)
+
+        layout = QHBoxLayout()
+        self.button_decrease_azimuth = QPushButton('−')
+        self.button_decrease_azimuth.clicked.connect(self.azimuth)
+        self.button_increase_azimuth = QPushButton('+')
+        self.button_increase_azimuth.clicked.connect(self.azimuth)
+        layout.addWidget(self.button_decrease_azimuth)
+        layout.addWidget(self.button_increase_azimuth)
+        main_layout.addRow('Azimuth', layout)
+        
+        layout = QHBoxLayout()
+        self.button_decrease_elevation = QPushButton('−')
+        self.button_decrease_elevation.clicked.connect(self.elevation)
+        self.button_increase_elevation = QPushButton('+')
+        self.button_increase_elevation.clicked.connect(self.elevation)
+        layout.addWidget(self.button_decrease_elevation)
+        layout.addWidget(self.button_increase_elevation)
+        main_layout.addRow('Elevation', layout)
+
+        return sidebar
+
+    def _visualizer(self) -> QWidget:
+        self.ren = vtk.vtkRenderer()
+        widget = QVTKRenderWindowInteractor(self)
+        self.renwin = widget.GetRenderWindow()
+        self.renwin.AddRenderer(self.ren)
+        self.iren = self.renwin.GetInteractor()
+        self.iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
+        self.ren.GetActiveCamera().SetParallelProjection(True)
+        self.ren.GetActiveCamera().SetClippingRange(0.01, 1000)
+
+        return widget
+
+    def reset(self):
+        camera = self.ren.GetActiveCamera()
+        camera.SetPosition(0, 0, 100)
+        camera.SetFocalPoint(0, 0, 0)
+        camera.SetViewUp(0, 1, 0)
+        camera.SetClippingRange(0.01, 1000)
+        camera.Azimuth(45)
+        camera.Elevation(45)
+        self.ren.ResetCamera()
+        self.iren.Render()
+    
+    def azimuth(self):
+        camera = self.ren.GetActiveCamera()
+        if self.sender() is self.button_decrease_azimuth:
+            camera.Azimuth(-5)
+        elif self.sender() is self.button_increase_azimuth:
+            camera.Azimuth(+5)
+
+        self.iren.Render()
+    
+    def elevation(self):
+        camera = self.ren.GetActiveCamera()
+        if self.sender() is self.button_decrease_elevation:
+            camera.Elevation(-5)
+        if self.sender() is self.button_increase_elevation:
+            camera.Elevation(+5)
+
+        self.iren.Render()
+
+
 def plot_nodes(array: np.ndarray, opacity: float=1.0) -> None:
     """Show a 3D plot of node locations."""
 
@@ -29,12 +119,10 @@ def plot_nodes(array: np.ndarray, opacity: float=1.0) -> None:
 def visualize_input(array: np.ndarray, opacity: float=0.5, length: float=1.0, use_lighting: bool=False) -> None:
     """Show an interactive visualization window of a 3D input image with values in [0, 255]."""
 
-    ren = vtk.vtkRenderer()
-    window = vtk.vtkRenderWindow()
-    window.AddRenderer(ren)
-    iren = vtk.vtkRenderWindowInteractor()
-    iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
-    iren.SetRenderWindow(window)
+    application = QApplication(sys.argv)
+    gui = VisualizationWindow()
+    ren = gui.ren
+    window = gui.renwin
 
     array = np.array(array)
     
@@ -69,48 +157,12 @@ def visualize_input(array: np.ndarray, opacity: float=0.5, length: float=1.0, us
     actor.GetProperty().SetLineWidth(1)
     actor.GetProperty().SetOpacity(opacity)
     actor.GetProperty().SetLighting(use_lighting)
-
     ren.AddActor(actor)
-    ren.GetActiveCamera().SetParallelProjection(True)
-    ren.GetActiveCamera().Azimuth(45)
-    ren.GetActiveCamera().Elevation(45)
+
     ren.ResetCamera()
-    iren.Initialize()
     window.Render()
-    iren.Start()
-
-def visualize_nodes(array: np.ndarray, opacity: float=1.0) -> None:
-    """Show an interactive visualization window of a 3D voxel model with white cubes representing nodes."""
-
-    ren = vtk.vtkRenderer()
-    window = vtk.vtkRenderWindow()
-    window.AddRenderer(ren)
-    iren = vtk.vtkRenderWindowInteractor()
-    iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
-    iren.SetRenderWindow(window)
-
-    data = vtk.vtkAppendPolyData()
-    array = np.array(array)
-    for x, y, z in np.argwhere(array):
-        cube = vtk.vtkCubeSource()
-        cube.SetBounds(x, x+1, y, y+1, z, z+1)
-        cube.Update()
-        data.AddInputData(cube.GetOutput())
-    data.Update()
-
-    mapper = vtk.vtkPolyDataMapper()
-    mapper.SetInputData(data.GetOutput())
-    actor = vtk.vtkActor()
-    actor.SetMapper(mapper)
-    actor.GetProperty().SetColor([1, 1, 1])
-    actor.GetProperty().SetLineWidth(1)
-    actor.GetProperty().SetOpacity(opacity)
-
-    ren.AddActor(actor)
-    ren.GetActiveCamera().SetParallelProjection(True)
-    iren.Initialize()
-    window.Render()
-    iren.Start()
+    gui.show()
+    sys.exit(application.exec_())
 
 def convert_output_to_lattice(output: list) -> Tuple[list, list, list]:
     """Convert a list of tuples (strut number, diameter) into a tuple of coordinates and diameters."""
@@ -199,7 +251,7 @@ def convert_graph_to_lattice(graph) -> Tuple[list, list, list]:
 
     return coordinates_1, coordinates_2, diameters
 
-def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float], true_diameters: List[float]=None, screenshot_filename: str=None, gui: bool=False) -> None:
+def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float], screenshot_filename: str=None, gui: bool=False) -> None:
     """Show an interactive visualization window of a lattice defined as a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters. All lists must be the same length."""
 
     assert len(locations_1) == len(locations_2) == len(diameters)
@@ -218,9 +270,7 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
         iren.SetRenderWindow(window)
 
-    if true_diameters is not None:
-        # The error value corresponding to red.
-        max_error = 1 #np.abs(np.array(diameters) - np.array(true_diameters)).max()
+    data = vtk.vtkAppendPolyData()
 
     for i, ((x1, y1, z1), (x2, y2, z2), diameter) in enumerate(zip(locations_1, locations_2, diameters)):
         line = vtk.vtkLineSource()
@@ -233,25 +283,16 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         tube = vtk.vtkTubeFilter()
         tube.SetInputData(line.GetOutput())
         tube.SetRadius(radius)
-        tube.SetNumberOfSides(5)
-        
-        mapper = vtk.vtkPolyDataMapper()
-        mapper.SetInputConnection(tube.GetOutputPort())
-        actor = vtk.vtkActor()
-        actor.SetMapper(mapper)
-        # actor.GetProperty().SetLighting(False)
-        
-        # Set the color representing the magnitude of the error.
-        if true_diameters is not None:
-            error = abs(diameter - true_diameters[i])
-            ratio = error / max_error
+        tube.SetNumberOfSides(4)
 
-            color_error_0 = np.array([1, 1, 1])
-            color_error_1 = np.array([1, 0, 0])
-            color = ratio * color_error_1 + (1 - ratio) * color_error_0
-            actor.GetProperty().SetColor(*color)
-
-        ren.AddActor(actor)
+        data.AddInputConnection(tube.GetOutputPort())
+        
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputConnection(data.GetOutputPort())
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+    # actor.GetProperty().SetLighting(False)
+    ren.AddActor(actor)
     
     if gui:
         ren.ResetCamera()
@@ -267,7 +308,7 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         window.Render()
         iren.Start()
     
-    # Save the window as a PNG image. Must have a visualization running.
+    # Save the window as a PNG image. Must have a visualization running first.
     if screenshot_filename is not None:
         filter = vtk.vtkWindowToImageFilter()
         filter.SetInput(window)
@@ -281,85 +322,9 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         writer.Write()
 
 
-class VisualizationWindow(QMainWindow):
-    """An GUI with an interactive visualizer and a sidebar with camera controls."""
-
-    def __init__(self) -> None:
-        super().__init__()
-
-        widget = QWidget()
-        layout = QHBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        self.setCentralWidget(widget)
-
-        layout.addWidget(self._sidebar())
-        layout.addWidget(self._visualizer())
-
-        # Start the interactor after the layout is created.
-        self.iren.Initialize()
-        self.iren.Start()
-        self.ren.GetActiveCamera().Azimuth(45)
-        self.ren.GetActiveCamera().Elevation(45)
-    
-    def _sidebar(self) -> QWidget:
-        sidebar = QWidget()
-        main_layout = QFormLayout(sidebar)
-        main_layout.setAlignment(Qt.AlignTop)
-
-        layout = QHBoxLayout()
-        self.button_decrease_azimuth = QPushButton('−')
-        self.button_decrease_azimuth.clicked.connect(self.azimuth)
-        self.button_increase_azimuth = QPushButton('+')
-        self.button_increase_azimuth.clicked.connect(self.azimuth)
-        layout.addWidget(self.button_decrease_azimuth)
-        layout.addWidget(self.button_increase_azimuth)
-        main_layout.addRow('Azimuth', layout)
-        
-        layout = QHBoxLayout()
-        self.button_decrease_elevation = QPushButton('−')
-        self.button_decrease_elevation.clicked.connect(self.elevation)
-        self.button_increase_elevation = QPushButton('+')
-        self.button_increase_elevation.clicked.connect(self.elevation)
-        layout.addWidget(self.button_decrease_elevation)
-        layout.addWidget(self.button_increase_elevation)
-        main_layout.addRow('Elevation', layout)
-
-        return sidebar
-
-    def _visualizer(self) -> QWidget:
-        self.ren = vtk.vtkRenderer()
-        widget = QVTKRenderWindowInteractor(self)
-        self.renwin = widget.GetRenderWindow()
-        self.renwin.AddRenderer(self.ren)
-        self.iren = self.renwin.GetInteractor()
-        self.iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
-        self.ren.GetActiveCamera().SetParallelProjection(True)
-        self.ren.GetActiveCamera().SetClippingRange(0.01, 1000)
-
-        return widget
-    
-    def azimuth(self):
-        camera = self.ren.GetActiveCamera()
-        if self.sender() is self.button_decrease_azimuth:
-            camera.Azimuth(-5)
-        elif self.sender() is self.button_increase_azimuth:
-            camera.Azimuth(+5)
-
-        self.iren.Render()
-    
-    def elevation(self):
-        camera = self.ren.GetActiveCamera()
-        if self.sender() is self.button_decrease_elevation:
-            camera.Elevation(-10)
-        if self.sender() is self.button_increase_elevation:
-            camera.Elevation(+10)
-
-        self.iren.Render()
-
-
 if __name__ == "__main__":
-    # inputs = read_pickle('Training_Data_10/inputs.pickle')
-    # visualize_input(inputs[0, 0, ...], opacity=1, length=1.0, use_lighting=not True)
+    inputs = read_pickle('Training_Data_10/inputs.pickle')
+    visualize_input(inputs[0, 0, ...], opacity=1, length=1.0, use_lighting=not True)
 
     # lattice = convert_output_to_lattice(read_outputs(3)[2])
     # visualize_lattice(*lattice)
@@ -367,22 +332,3 @@ if __name__ == "__main__":
     # graphs = read_pickle('Training_Data_10/graphs.pickle')
     # lattice = convert_graph_to_lattice(graphs[0])
     # visualize_lattice(*lattice)
-
-    # Test the difference in pixel values between PNG and JPG. Create an image with random noise and save as both PNG and JPG.
-    import numpy as np
-    from PIL import Image
-    np.random.seed(45)
-    a = np.random.rand(11, 11)
-    a -= a.min()
-    a /= a.max()
-    a *= 255
-    image = Image.fromarray(a.astype(np.uint8))
-    image.save('test.png')
-    image.save('test.jpg')
-    with Image.open('test.png', 'r') as f:
-        png = np.asarray(f, dtype=np.uint8).astype(float)
-    with Image.open('test.jpg', 'r') as f:
-        jpg = np.asarray(f, dtype=np.uint8).astype(float)
-    
-    d = np.abs(png - jpg) / 255
-    print(f"Difference: {np.mean(d):.3f} (average), {np.min(d):.3f} (min), {np.max(d):.3f} (max)")
