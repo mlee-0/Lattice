@@ -162,12 +162,11 @@ class MLP(Module):
         super().__init__()
 
         self.linear = Sequential(
-            Linear(11**3, 1),
-            # Linear(256, 64),
-            # Linear(64, 32),
-            # Linear(32, 16),
-            # Linear(16, 8),
-            # Linear(8, 1),
+            Linear(11**3, 16),
+            ReLU(inplace=True),
+            Linear(16, 8),
+            ReLU(inplace=True),
+            Linear(8, 1),
         )
 
         # Initialize weights that linearly decrease away from the center of the volume.

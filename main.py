@@ -518,16 +518,16 @@ if __name__ == "__main__":
         "visualize_results": True,
 
         "train_existing": True,
-        "filename_model": "model_5conv_res.pth",
+        "filename_model": "model.pth",
         "save_model_every": 1,
 
-        "epoch_count": 1,
+        "epoch_count": 10,
         "learning_rate": 1e-3,
         "decay_learning_rate": not True,
         "batch_sizes": (32, 32, 32),
         "data_split": (0.8, 0.1, 0.1),
         
-        "dataset": StrutDataset(1000, p=0.1, normalize_inputs=True),
+        "dataset": StrutDataset(1000, p=0.1, normalize_inputs=True, struts=make_struts(1, (11, 11, 11))),
         # "dataset": CenteredStrutDataset(normalize_inputs=False),
         "Model": ResNet,
         "Optimizer": torch.optim.Adam,

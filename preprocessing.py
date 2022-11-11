@@ -150,6 +150,43 @@ def get_unique_strut_numbers(struts: list) -> list:
     
     return strut_numbers
 
+def make_struts(length: int, shape: Tuple[int, int, int]) -> List[Tuple[tuple, tuple]]:
+    """Return a list of all unique struts smaller than or equal to the given length, whose coordinates are centered within a `shape`-sized volume. Only returns struts with direction vectors in the first octant (+, +, +).
+    
+    `length`: The maximum difference in coordinates between two nodes. For example, a length of 3 allows (0, 0, 0) and (3, 3, 3) but not (0, 0, 0) and (4, 4, 4).
+    `shape`: The shape of the volume within which the struts are centered.
+    """
+    
+    h, w, d = shape
+
+    # Difference in corresponding coordinates between two nodes. For example, a dx value of 2 results in (0, _, _) and (2, _, _).
+    dx = list(range(length+1))
+    dy = list(range(length+1))
+    dz = list(range(length+1))
+
+    # List of direction vectors pointing from node 1 to node 2. For example, a direction of (0, 1, 2) and having node 1 at the origin (0, 0, 0) results in node 2 being located at (0, 1, 2).
+    directions = []
+    for x in dx:
+        for y in dy:
+            for z in dz:
+                # Exclude the direction with 0 length.
+                if (x, y, z) != (0, 0, 0):
+                    directions.append([x, y, z])
+
+    # Shift struts to be centered at within the volume to maximize symmetry within the volume. If a strut is not centered, density values from one side of a strut will be used more than from the opposite side.
+    struts = []
+    for i, (x, y, z) in enumerate(directions):
+        offset_x = (np.ceil(h/2) - 1) - x//2
+        offset_y = (np.ceil(w/2) - 1) - y//2
+        offset_z = (np.ceil(d/2) - 1) - z//2
+        struts.append((
+            (0 + offset_x, 0 + offset_y, 0 + offset_z),
+            (x + offset_x, y + offset_y, z + offset_z),
+        ))
+        assert [abs(_1 - _2) for _1, _2 in zip(struts[-1][0], struts[-1][1])] == directions[i]
+    
+    return struts
+
 def apply_mask_inputs(inputs: torch.Tensor, outputs: list):
     """Replace density values outside the predefined volume of space with some constant value."""
 
