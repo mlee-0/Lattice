@@ -8,99 +8,8 @@ import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor  # type: ignore
 
 from datasets import *
+from gui import InferenceWindow
 from preprocessing import *
-
-
-class VisualizationWindow(QMainWindow):
-    """An GUI with an interactive visualizer and a sidebar with camera controls."""
-
-    def __init__(self) -> None:
-        super().__init__()
-
-        widget = QWidget()
-        layout = QHBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        self.setCentralWidget(widget)
-
-        layout.addWidget(self._sidebar())
-        layout.addWidget(self._visualizer())
-
-        # Start the interactor after the layout is created.
-        self.iren.Initialize()
-        self.iren.Start()
-        self.reset()
-
-    def _sidebar(self) -> QWidget:
-        sidebar = QWidget()
-        main_layout = QFormLayout(sidebar)
-        main_layout.setAlignment(Qt.AlignTop)
-
-        layout = QHBoxLayout()
-        layout.setSpacing(0)
-        self.button_decrease_azimuth = QPushButton('−')
-        self.button_decrease_azimuth.clicked.connect(self.azimuth)
-        self.button_increase_azimuth = QPushButton('+')
-        self.button_increase_azimuth.clicked.connect(self.azimuth)
-        layout.addWidget(self.button_decrease_azimuth)
-        layout.addWidget(self.button_increase_azimuth)
-        main_layout.addRow('Azimuth', layout)
-        
-        layout = QHBoxLayout()
-        layout.setSpacing(0)
-        self.button_decrease_elevation = QPushButton('−')
-        self.button_decrease_elevation.clicked.connect(self.elevation)
-        self.button_increase_elevation = QPushButton('+')
-        self.button_increase_elevation.clicked.connect(self.elevation)
-        layout.addWidget(self.button_decrease_elevation)
-        layout.addWidget(self.button_increase_elevation)
-        main_layout.addRow('Elevation', layout)
-
-        button_reset = QPushButton('Reset')
-        button_reset.clicked.connect(self.reset)
-        main_layout.addRow(button_reset)
-
-        return sidebar
-
-    def _visualizer(self) -> QWidget:
-        self.ren = vtk.vtkRenderer()
-        widget = QVTKRenderWindowInteractor(self)
-        self.renwin = widget.GetRenderWindow()
-        self.renwin.AddRenderer(self.ren)
-        self.iren = self.renwin.GetInteractor()
-        self.iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
-        self.ren.GetActiveCamera().SetParallelProjection(True)
-        self.ren.GetActiveCamera().SetClippingRange(0.01, 1000)
-
-        return widget
-
-    def reset(self):
-        camera = self.ren.GetActiveCamera()
-        camera.SetPosition(0, 0, 100)
-        camera.SetFocalPoint(0, 0, 0)
-        camera.SetViewUp(0, 1, 0)
-        camera.SetClippingRange(0.01, 1000)
-        camera.Azimuth(45)
-        camera.Elevation(45)
-        self.ren.ResetCamera()
-        self.iren.Render()
-    
-    def azimuth(self):
-        camera = self.ren.GetActiveCamera()
-        if self.sender() is self.button_decrease_azimuth:
-            camera.Azimuth(-5)
-        elif self.sender() is self.button_increase_azimuth:
-            camera.Azimuth(+5)
-
-        self.iren.Render()
-    
-    def elevation(self):
-        camera = self.ren.GetActiveCamera()
-        if self.sender() is self.button_decrease_elevation:
-            camera.Elevation(-5)
-        if self.sender() is self.button_increase_elevation:
-            camera.Elevation(+5)
-
-        self.iren.Render()
 
 
 def plot_nodes(array: np.ndarray, opacity: float=1.0) -> None:
@@ -122,7 +31,7 @@ def visualize_input(array: np.ndarray, opacity: float=0.5, length: float=1.0, us
     """Show an interactive visualization window of a 3D input image with values in [0, 255]."""
 
     application = QApplication(sys.argv)
-    gui = VisualizationWindow()
+    gui = InferenceWindow()
     ren = gui.ren
     window = gui.renwin
 
@@ -287,7 +196,7 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
 
     if gui:
         application = QApplication(sys.argv)
-        gui = VisualizationWindow()
+        gui = InferenceWindow()
         ren = gui.ren
         window = gui.renwin
     else:

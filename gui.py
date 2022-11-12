@@ -7,6 +7,7 @@ import os
 from queue import Queue
 import sys
 import threading
+import time
 from typing import Tuple
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
@@ -371,6 +372,10 @@ class InferenceWindow(QMainWindow):
         layout_.addWidget(self.field_density_depth)
         layout.addRow('Density size', layout_)
 
+        self.field_density_function = QComboBox()
+        self.field_density_function.addItems(['linear', 'sin', 'cos', 'exp', 'random'])
+        layout.addRow('Density function', self.field_density_function)
+
         self.field_density_min = QDoubleSpinBox()
         self.field_density_max = QDoubleSpinBox()
         self.field_density_min.setRange(0.0, 1.0)
@@ -384,10 +389,6 @@ class InferenceWindow(QMainWindow):
         layout_.addWidget(self.field_density_min)
         layout_.addWidget(self.field_density_max)
         layout.addRow('Density range', layout_)
-
-        self.field_density_function = QComboBox()
-        self.field_density_function.addItems(['linear', 'sin', 'cos', 'exp', 'random'])
-        layout.addRow('Density function', self.field_density_function)
 
         self.field_lattice_height = QSpinBox()
         self.field_lattice_width = QSpinBox()
@@ -433,6 +434,10 @@ class InferenceWindow(QMainWindow):
         layout_.addWidget(self.button_generate)
         layout_.addWidget(self.button_clear)
         layout.addRow(layout_)
+
+        self.label_runtime = QLabel()
+        self.label_runtime.setAlignment(Qt.AlignCenter)
+        layout.addRow(self.label_runtime)
 
         # Fields related to the camera.
         box = QGroupBox('Camera')
@@ -523,12 +528,16 @@ class InferenceWindow(QMainWindow):
 
         # Generate the next batch.
         try:
-            actor = make_actor_lattice(*next(self.generator))
+            tic = time.time()
+            locations_1, locations_2, diameters = next(self.generator)
+            toc = time.time()
+            self.label_runtime.setText(f"Generated in {toc - tic:.2f} seconds.")
         except StopIteration:
             self.button_generate.setEnabled(False)
         else:
             self.batch += 1
             self.ren.RemoveActor(self.actor)
+            actor = make_actor_lattice(locations_1, locations_2, diameters)
             self.actor = actor
             self.ren.AddActor(self.actor)
         
@@ -548,6 +557,7 @@ class InferenceWindow(QMainWindow):
         self.batch = -1
 
         self.button_generate.setEnabled(True)
+        self.label_runtime.clear()
     
         self.iren.Render()
 
