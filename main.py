@@ -317,7 +317,7 @@ def evaluate(outputs: np.ndarray, labels: np.ndarray, inputs: np.ndarray, datase
     return results
 
 def infer(model: nn.Module, filename_model: str, dataset: Dataset, batch_size: int):
-    """Make predictions using a trained model on data not part of the training/testing dataset."""
+    """Make predictions using a trained model on data without corresponding labels. Defined as a generator function to allow visualizing intermediate results one by one."""
 
     checkpoint = load_model(os.path.join(DATASET_FOLDER, filename_model), 'cpu')
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -329,23 +329,20 @@ def infer(model: nn.Module, filename_model: str, dataset: Dataset, batch_size: i
     diameters = torch.tensor([0.05] * len(dataset))
     locations_1 = list([_[0] for _ in dataset.indices])
     locations_2 = list([_[1] for _ in dataset.indices])
+    yield locations_1, locations_2, diameters
 
     # Visualize the lattice structure before predicting diameters. Intended to show only the shape of the lattice.
     # visualize_lattice(locations_1, locations_2, diameters, gui=False, screenshot_filename=f"{0:03}")
 
-    tic = time.time()
     with torch.no_grad():
         for i, input_ in enumerate(loader, 1):
             diameter = model(input_)
             # if i % 10 == 0:
-            #     print(f"Strut {i}/{n}: diameter {diameter}", end='\r')            
+            #     print(f"Strut {i}/{n}: diameter {diameter}", end='\r')
             diameters[(i-1)*batch_size:i*batch_size] = diameter.squeeze()
 
+            yield locations_1, locations_2, diameters
             # visualize_lattice(locations_1, locations_2, diameters, gui=False, screenshot_filename=f"{i:03}")
-    toc = time.time()
-    print(f"Generated {len(dataset)} struts in {toc - tic:.1f} seconds.")
-    
-    return locations_1, locations_2, diameters
 
 
 def main(
@@ -567,10 +564,16 @@ if __name__ == "__main__":
     main(**kwargs)
 
 
-    # locations_1, locations_2, diameters = infer(
+    # generator = infer(
     #     model=ResNet(),
     #     filename_model="model_5conv_res.pth",
-    #     dataset=TestDataset('circle'),
+    #     dataset=InferenceDataset('circle'),
     #     batch_size=100,
     # )
+
+    # tic = time.time()
+    # for locations_1, locations_2, diameters in generator:
+    #     visualize_lattice(locations_1, locations_2, diameters, gui=False, screenshot_filename=f"{i:03}")
+    # toc = time.time()
+    # print(f"Generated {len(dataset)} struts in {toc - tic:.1f} seconds.")
     # visualize_lattice(locations_1, locations_2, diameters, gui=True)

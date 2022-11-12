@@ -177,37 +177,53 @@ class StrutDataset(torch.utils.data.Dataset):
 #         # Return the entire graph. Returning individual attributes (x, edge_index, y) results in incorrect batching.
 #         return self.dataset[index]
 
-class TestDataset(torch.utils.data.Dataset):
-    """A test dataset for testing the iterative lattice generation process. The strut being predicted is fixed at the center of the density matrix."""
+class InferenceDataset(torch.utils.data.Dataset):
+    """A dataset for testing the iterative lattice generation process. The strut being predicted is fixed at the center of the density matrix."""
 
-    def __init__(self, shape: str) -> None:
+    def __init__(self, density_shape: Tuple[int, int, int], density_range: Tuple[int, int], density_function: str, lattice_shape: Tuple[int, int, int], lattice_type: str) -> None:
         super().__init__()
-        assert shape in ('rectangle', 'circle')
+        assert lattice_type in ('rectangle', 'circle')
 
-        # from scipy.ndimage import gaussian_filter
+        from scipy.ndimage import gaussian_filter
 
         # Shape of density matrix.
-        h, w, d = 40, 40, 40
+        h, w, d = density_shape
 
-        # # Generate a density matrix with linearly varying values.
-        # self.density = np.ones((h, w, d))
-        # self.density *= np.concatenate([
-        #     np.zeros(d//8),
-        #     np.linspace(0, 1, 3*d//4),
-        #     np.ones(d//8),
-        # ]) * 255
+        # Generate a density matrix with the specified type.
+        if density_function == 'linear':
+            self.density = np.ones((h, w, d))
+            self.density *= np.concatenate([
+                # np.zeros(d//8),
+                np.linspace(density_range[0], density_range[1], d),
+                # np.ones(d//8),
+            ]) * 255
         
-        # Alternatively, generate a density matrix with sinusoidally varying values.
-        self.density = np.ones((h, w, d))
-        self.density *= (np.cos(np.linspace(0, 2*np.pi, d)) * 0.5 + 0.5) * 255
-
-        # Alternatively, generate a density matrix with random noise.
-        # np.random.seed(42)
-        # self.density = np.random.rand(h, w, d)
-        # self.density = gaussian_filter(self.density, sigma=3)
-        # self.density -= self.density.min()
-        # self.density /= self.density.max()
-        # self.density *= 255
+        elif density_function == 'sin':
+            self.density = np.ones((h, w, d))
+            self.density *= (np.sin(np.linspace(0, 2*np.pi, d)) * ((density_range[1]-density_range[0]) / 2) + 0.5) * 255
+        
+        elif density_function == 'cos':
+            self.density = np.ones((h, w, d))
+            self.density *= (np.cos(np.linspace(0, 2*np.pi, d)) * ((density_range[1]-density_range[0]) / 2) + 0.5) * 255
+        
+        elif density_function == 'exp':
+            self.density = np.ones((h, w, d))
+            self.density *= np.exp(np.linspace(density_range[0], density_range[1], d))
+            self.density -= self.density.min()
+            self.density /= self.density.max()
+            self.density *= (density_range[1] - density_range[0])
+            self.density += density_range[0]
+            self.density *= 255
+        
+        elif density_function == 'random':
+            # np.random.seed(42)
+            self.density = np.random.rand(h, w, d)
+            self.density = gaussian_filter(self.density, sigma=3)
+            self.density -= self.density.min()
+            self.density /= self.density.max()
+            self.density *= (density_range[1] - density_range[0])
+            self.density += density_range[0]
+            self.density *= 255
 
         # visualize_input(self.density, opacity=1.0)
 
@@ -219,12 +235,10 @@ class TestDataset(torch.utils.data.Dataset):
         # Generate a lattice structure within the volume, as a list containing pairs of node coordinates.
         self.indices = []
 
-        if shape == 'rectangle':
+        if lattice_type == 'rectangle':
             # List of struts to add at each node.
             struts = ((1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (0, 1, 1), (1, 0, 1), (1, 1, 1))
-            X = list(range(5, 15))
-            Y = list(range(5, 15))
-            Z = list(range(5, 35))
+            X, Y, Z = [np.arange(size) + (density_size - size) // 2 for density_size, size in zip(density_shape, lattice_shape)]
 
             for x in X:
                 for y in Y:
@@ -239,8 +253,8 @@ class TestDataset(torch.utils.data.Dataset):
                                 (x+dx, y+dy, z+dz),  # Node 2 for current strut
                             ))
         
-        elif shape == 'circle':
-            radius = 10
+        elif lattice_type == 'circle':
+            radius = max(lattice_shape[:2]) // 2
             theta = np.linspace(0, 360, 500) * (np.pi / 180)
             X = np.round(radius * np.cos(theta)).astype(int)
             Y = np.round(radius * np.sin(theta)).astype(int)
@@ -257,7 +271,7 @@ class TestDataset(torch.utils.data.Dataset):
             XY[0, :] += (h//2)
             XY[1, :] += (w//2)
 
-            Z = list(range(5, 35))
+            Z = np.arange(lattice_shape[2]) + (density_shape[2] - lattice_shape[2]) // 2
 
             for z in Z:
                 for i in range(XY.shape[1] - 1):
@@ -305,4 +319,4 @@ class TestDataset(torch.utils.data.Dataset):
 
 
 if __name__ == '__main__':
-    dataset = TestDataset('circle')
+    dataset = InferenceDataset('circle')

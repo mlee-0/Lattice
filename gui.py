@@ -15,11 +15,16 @@ from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import Qt, QTimer, QMargins
 from PyQt5.QtGui import QFont, QImage, QPixmap
 from PyQt5.QtWidgets import *
+import vtk
+from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor  # type: ignore
 
 import main
+from models import *
+from datasets import *
+from visualization import *
 
 
-class MainWindow(QMainWindow):
+class TrainingWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
@@ -316,10 +321,272 @@ class MainWindow(QMainWindow):
     #     sys.stdout = sys.__stdout__
     #     super().closeEvent(event)
 
+class InferenceWindow(QMainWindow):
+    """A GUI for testing a pretrained model on a custom dataset."""
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.setCentralWidget(widget)
+
+        layout.addWidget(self._sidebar(), stretch=0)
+        layout.addWidget(self._visualizer(), stretch=1)
+
+        # Start the interactor after the layout is created.
+        self.iren.Initialize()
+        self.iren.Start()
+        self.reset()
+
+        self.dataset = None
+        self.generator = None
+        self.actor = None
+        self.batch = -1
+    
+    def _sidebar(self) -> QWidget:
+        sidebar = QWidget()
+        main_layout = QVBoxLayout(sidebar)
+        main_layout.setAlignment(Qt.AlignTop)
+
+        # Fields related to the density and lattice.
+        box = QGroupBox('Setup')
+        layout = QFormLayout(box)
+        main_layout.addWidget(box)
+
+        self.field_density_height = QSpinBox()
+        self.field_density_width = QSpinBox()
+        self.field_density_depth = QSpinBox()
+        self.field_density_height.setRange(5, 100)
+        self.field_density_width.setRange(5, 100)
+        self.field_density_depth.setRange(5, 100)
+        self.field_density_height.setValue(20)
+        self.field_density_width.setValue(20)
+        self.field_density_depth.setValue(20)
+        layout_ = QHBoxLayout()
+        layout_.setSpacing(0)
+        layout_.addWidget(self.field_density_height)
+        layout_.addWidget(self.field_density_width)
+        layout_.addWidget(self.field_density_depth)
+        layout.addRow('Density size', layout_)
+
+        self.field_density_min = QDoubleSpinBox()
+        self.field_density_max = QDoubleSpinBox()
+        self.field_density_min.setRange(0.0, 1.0)
+        self.field_density_max.setRange(0.0, 1.0)
+        self.field_density_min.setSingleStep(0.1)
+        self.field_density_max.setSingleStep(0.1)
+        self.field_density_min.setValue(0.0)
+        self.field_density_max.setValue(1.0)
+        layout_ = QHBoxLayout()
+        layout_.setSpacing(0)
+        layout_.addWidget(self.field_density_min)
+        layout_.addWidget(self.field_density_max)
+        layout.addRow('Density range', layout_)
+
+        self.field_density_function = QComboBox()
+        self.field_density_function.addItems(['linear', 'sin', 'cos', 'exp', 'random'])
+        layout.addRow('Density function', self.field_density_function)
+
+        self.field_lattice_height = QSpinBox()
+        self.field_lattice_width = QSpinBox()
+        self.field_lattice_depth = QSpinBox()
+        self.field_lattice_height.setRange(1, 100)
+        self.field_lattice_width.setRange(1, 100)
+        self.field_lattice_depth.setRange(1, 100)
+        self.field_lattice_height.setValue(5)
+        self.field_lattice_width.setValue(5)
+        self.field_lattice_depth.setValue(5)
+        layout_ = QHBoxLayout()
+        layout_.setSpacing(0)
+        layout_.addWidget(self.field_lattice_height)
+        layout_.addWidget(self.field_lattice_width)
+        layout_.addWidget(self.field_lattice_depth)
+        layout.addRow('Lattice size', layout_)
+
+        self.field_lattice_type = QComboBox()
+        self.field_lattice_type.addItems(['rectangle', 'circle'])
+        layout.addRow('Lattice type', self.field_lattice_type)
+
+        # Fields related to the generation process.
+        box = QGroupBox('Generation')
+        layout = QFormLayout(box)
+        main_layout.addWidget(box)
+
+        self.field_model = QLineEdit('.pth')
+        layout.addRow('Model', self.field_model)
+
+        self.field_batch_size = QSpinBox()
+        self.field_batch_size.setRange(1, 1000)
+        layout.addRow('Batch size', self.field_batch_size)
+
+        self.checkbox_screenshot = QCheckBox('Screenshot each batch')
+        layout.addRow(self.checkbox_screenshot)
+
+        self.button_generate = QPushButton('Generate')
+        self.button_generate.clicked.connect(self.generate)
+        self.button_clear = QPushButton('Clear')
+        self.button_clear.clicked.connect(self.clear)
+        layout_ = QHBoxLayout()
+        layout_.setSpacing(0)
+        layout_.addWidget(self.button_generate)
+        layout_.addWidget(self.button_clear)
+        layout.addRow(layout_)
+
+        # Fields related to the camera.
+        box = QGroupBox('Camera')
+        layout = QFormLayout(box)
+        main_layout.addWidget(box)
+
+        layout_ = QHBoxLayout()
+        layout_.setSpacing(0)
+        self.button_decrease_azimuth = QPushButton('−')
+        self.button_decrease_azimuth.clicked.connect(self.azimuth)
+        self.button_increase_azimuth = QPushButton('+')
+        self.button_increase_azimuth.clicked.connect(self.azimuth)
+        layout_.addWidget(self.button_decrease_azimuth)
+        layout_.addWidget(self.button_increase_azimuth)
+        layout.addRow('Horizontal', layout_)
+        
+        layout_ = QHBoxLayout()
+        layout_.setSpacing(0)
+        self.button_decrease_elevation = QPushButton('−')
+        self.button_decrease_elevation.clicked.connect(self.elevation)
+        self.button_increase_elevation = QPushButton('+')
+        self.button_increase_elevation.clicked.connect(self.elevation)
+        layout_.addWidget(self.button_decrease_elevation)
+        layout_.addWidget(self.button_increase_elevation)
+        layout.addRow('Vertical', layout_)
+
+        button_reset = QPushButton('Reset')
+        button_reset.clicked.connect(self.reset)
+        layout.addRow(button_reset)
+
+        return sidebar
+    
+    def _visualizer(self) -> QWidget:
+        self.ren = vtk.vtkRenderer()
+        widget = QVTKRenderWindowInteractor(self)
+        self.renwin = widget.GetRenderWindow()
+        self.renwin.AddRenderer(self.ren)
+        self.iren = self.renwin.GetInteractor()
+        self.iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
+        self.ren.GetActiveCamera().SetParallelProjection(True)
+
+        return widget
+    
+    def save_screenshot(self):
+        filter = vtk.vtkWindowToImageFilter()
+        filter.SetInput(self.renwin)
+        # filter.SetScale(1)
+        filter.SetInputBufferTypeToRGB()
+        filter.Update()
+
+        writer = vtk.vtkPNGWriter()
+        writer.SetFileName(os.path.join('Screenshots', f'{self.batch:03}.png'))
+        writer.SetInputConnection(filter.GetOutputPort())
+        writer.Write()
+
+    def generate(self) -> None:
+        """Generate and show one batch of data."""
+
+        # Load the dataset.
+        if self.dataset is None:
+            self.dataset = InferenceDataset(
+                density_shape=(
+                    self.field_density_height.value(),
+                    self.field_density_width.value(),
+                    self.field_density_depth.value(),
+                ),
+                density_range=(
+                    self.field_density_min.value(),
+                    self.field_density_max.value(),
+                ),
+                density_function=self.field_density_function.currentText(),
+                lattice_shape=(
+                    self.field_lattice_height.value(),
+                    self.field_lattice_width.value(),
+                    self.field_lattice_depth.value(),
+                ),
+                lattice_type=self.field_lattice_type.currentText(),
+            )
+
+            self.generator = main.infer(
+                model=ResNet(),
+                filename_model=self.field_model.text(),
+                dataset=self.dataset,
+                batch_size=self.field_batch_size.value(),
+            )
+
+            self.reset()
+
+        # Generate the next batch.
+        try:
+            actor = make_actor_lattice(*next(self.generator))
+        except StopIteration:
+            self.button_generate.setEnabled(False)
+        else:
+            self.batch += 1
+            self.ren.RemoveActor(self.actor)
+            self.actor = actor
+            self.ren.AddActor(self.actor)
+        
+        self.reset()
+
+        if self.checkbox_screenshot.isChecked():
+            self.save_screenshot()
+        
+        self.iren.Render()
+    
+    def clear(self):
+        """Remove generated data."""
+        self.ren.RemoveActor(self.actor)
+        self.dataset = None
+        self.generator = None
+        self.actor = None
+        self.batch = -1
+
+        self.button_generate.setEnabled(True)
+    
+        self.iren.Render()
+
+    def reset(self):
+        """Reset the camera."""
+        camera = self.ren.GetActiveCamera()
+        camera.SetPosition(0, 0, 100)
+        camera.SetFocalPoint(0, 0, 0)
+        camera.SetViewUp(0, 1, 0)
+        camera.SetClippingRange(0.01, 1000)
+        camera.Azimuth(45)
+        camera.Elevation(45)
+        self.ren.ResetCamera()
+        self.iren.Render()
+    
+    def azimuth(self):
+        """Increment the horizontal camera angle."""
+        camera = self.ren.GetActiveCamera()
+        if self.sender() is self.button_decrease_azimuth:
+            camera.Azimuth(-5)
+        elif self.sender() is self.button_increase_azimuth:
+            camera.Azimuth(+5)
+
+        self.iren.Render()
+    
+    def elevation(self):
+        """Increment the vertical camera angle."""
+        camera = self.ren.GetActiveCamera()
+        if self.sender() is self.button_decrease_elevation:
+            camera.Elevation(-5)
+        if self.sender() is self.button_increase_elevation:
+            camera.Elevation(+5)
+
+        self.iren.Render()
+
 
 if __name__ == "__main__":
     application = QApplication(sys.argv)
-    window = MainWindow()
+    window = InferenceWindow()
     window.setWindowTitle("Lattice Generation")
     window.show()
     sys.exit(application.exec_())

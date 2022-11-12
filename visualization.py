@@ -35,11 +35,8 @@ class VisualizationWindow(QMainWindow):
         main_layout = QFormLayout(sidebar)
         main_layout.setAlignment(Qt.AlignTop)
 
-        button_reset = QPushButton('Reset')
-        button_reset.clicked.connect(self.reset)
-        main_layout.addRow(button_reset)
-
         layout = QHBoxLayout()
+        layout.setSpacing(0)
         self.button_decrease_azimuth = QPushButton('−')
         self.button_decrease_azimuth.clicked.connect(self.azimuth)
         self.button_increase_azimuth = QPushButton('+')
@@ -49,6 +46,7 @@ class VisualizationWindow(QMainWindow):
         main_layout.addRow('Azimuth', layout)
         
         layout = QHBoxLayout()
+        layout.setSpacing(0)
         self.button_decrease_elevation = QPushButton('−')
         self.button_decrease_elevation.clicked.connect(self.elevation)
         self.button_increase_elevation = QPushButton('+')
@@ -56,6 +54,10 @@ class VisualizationWindow(QMainWindow):
         layout.addWidget(self.button_decrease_elevation)
         layout.addWidget(self.button_increase_elevation)
         main_layout.addRow('Elevation', layout)
+
+        button_reset = QPushButton('Reset')
+        button_reset.clicked.connect(self.reset)
+        main_layout.addRow(button_reset)
 
         return sidebar
 
@@ -250,6 +252,33 @@ def convert_graph_to_lattice(graph) -> Tuple[list, list, list]:
         diameters.append(graph.y[i])
 
     return coordinates_1, coordinates_2, diameters
+
+def make_actor_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float], resolution: int=5):
+    """Return an actor of a lattice."""
+
+    data = vtk.vtkAppendPolyData()
+
+    for i, ((x1, y1, z1), (x2, y2, z2), diameter) in enumerate(zip(locations_1, locations_2, diameters)):
+        line = vtk.vtkLineSource()
+        line.SetPoint1(x1, y1, z1)
+        line.SetPoint2(x2, y2, z2)
+        line.SetResolution(0)
+        line.Update()
+
+        radius = diameter / 2
+        tube = vtk.vtkTubeFilter()
+        tube.SetInputData(line.GetOutput())
+        tube.SetRadius(radius)
+        tube.SetNumberOfSides(resolution)
+
+        data.AddInputConnection(tube.GetOutputPort())
+        
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputConnection(data.GetOutputPort())
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+
+    return actor
 
 def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float], screenshot_filename: str=None, gui: bool=False) -> None:
     """Show an interactive visualization window of a lattice defined as a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters. All lists must be the same length."""

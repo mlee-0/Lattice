@@ -1,6 +1,7 @@
 .DS_Store
 *.pyc
 *.pth
+*.pickle
 
 Training_Data_10
-*.pickle
+Screenshots
