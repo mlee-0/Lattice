@@ -376,20 +376,6 @@ class InferenceWindow(QMainWindow):
         self.field_density_function.addItems(['linear', 'sin', 'cos', 'exp', 'random'])
         layout.addRow('Density function', self.field_density_function)
 
-        self.field_density_min = QDoubleSpinBox()
-        self.field_density_max = QDoubleSpinBox()
-        self.field_density_min.setRange(0.0, 1.0)
-        self.field_density_max.setRange(0.0, 1.0)
-        self.field_density_min.setSingleStep(0.1)
-        self.field_density_max.setSingleStep(0.1)
-        self.field_density_min.setValue(0.0)
-        self.field_density_max.setValue(1.0)
-        layout_ = QHBoxLayout()
-        layout_.setSpacing(0)
-        layout_.addWidget(self.field_density_min)
-        layout_.addWidget(self.field_density_max)
-        layout.addRow('Density range', layout_)
-
         self.field_lattice_height = QSpinBox()
         self.field_lattice_width = QSpinBox()
         self.field_lattice_depth = QSpinBox()
@@ -504,10 +490,6 @@ class InferenceWindow(QMainWindow):
                     self.field_density_width.value(),
                     self.field_density_depth.value(),
                 ),
-                density_range=(
-                    self.field_density_min.value(),
-                    self.field_density_max.value(),
-                ),
                 density_function=self.field_density_function.currentText(),
                 lattice_shape=(
                     self.field_lattice_height.value(),
@@ -524,8 +506,6 @@ class InferenceWindow(QMainWindow):
                 batch_size=self.field_batch_size.value(),
             )
 
-            self.reset()
-
         # Generate the next batch.
         try:
             tic = time.time()
@@ -536,13 +516,12 @@ class InferenceWindow(QMainWindow):
             self.button_generate.setEnabled(False)
         else:
             self.batch += 1
-            self.ren.RemoveActor(self.actor)
             actor = make_actor_lattice(locations_1, locations_2, diameters)
-            self.actor = actor
-            self.ren.AddActor(self.actor)
-        
-        self.reset()
+            self.set_actor(actor)
 
+            if self.batch == 0:
+                self.reset()
+        
         if self.checkbox_screenshot.isChecked():
             self.save_screenshot()
         
@@ -560,6 +539,12 @@ class InferenceWindow(QMainWindow):
         self.label_runtime.clear()
     
         self.iren.Render()
+
+    def set_actor(self, actor: vtk.vtkActor):
+        if self.actor is not None:
+            self.ren.RemoveActor(self.actor)
+        self.actor = actor
+        self.ren.AddActor(self.actor)
 
     def reset(self):
         """Reset the camera."""

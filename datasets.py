@@ -180,14 +180,14 @@ class StrutDataset(torch.utils.data.Dataset):
 class InferenceDataset(torch.utils.data.Dataset):
     """A dataset for testing the iterative lattice generation process. The strut being predicted is fixed at the center of the density matrix."""
 
-    def __init__(self, density_shape: Tuple[int, int, int], density_range: Tuple[int, int], density_function: str, lattice_shape: Tuple[int, int, int], lattice_type: str) -> None:
+    def __init__(self, density_shape: Tuple[int, int, int], density_function: str, lattice_shape: Tuple[int, int, int], lattice_type: str) -> None:
         super().__init__()
         assert lattice_type in ('rectangle', 'circle')
 
-        from scipy.ndimage import gaussian_filter
-
         # Shape of density matrix.
         h, w, d = density_shape
+        # Start and end values of density matrix.
+        density_range = [0.0, 1.0]
 
         # Generate a density matrix with the specified type.
         if density_function == 'linear':
@@ -216,6 +216,8 @@ class InferenceDataset(torch.utils.data.Dataset):
             self.density *= 255
         
         elif density_function == 'random':
+            from scipy.ndimage import gaussian_filter
+
             # np.random.seed(42)
             self.density = np.random.rand(h, w, d)
             self.density = gaussian_filter(self.density, sigma=3)
