@@ -345,11 +345,26 @@ class InferenceWindow(QMainWindow):
         self.generator = None
         self.actor = None
         self.batch = -1
-    
+
     def _sidebar(self) -> QWidget:
         sidebar = QWidget()
         main_layout = QVBoxLayout(sidebar)
         main_layout.setAlignment(Qt.AlignTop)
+
+        self.button_generate = QPushButton('Generate')
+        self.button_generate.clicked.connect(self.generate)
+        self.button_clear = QPushButton('Clear')
+        self.button_clear.clicked.connect(self.clear)
+        layout_ = QHBoxLayout()
+        layout_.setContentsMargins(0, 0, 0, 0)
+        layout_.setSpacing(0)
+        layout_.addWidget(self.button_generate)
+        layout_.addWidget(self.button_clear)
+        main_layout.addLayout(layout_)
+
+        self.label_runtime = QLabel()
+        self.label_runtime.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(self.label_runtime)
 
         # Fields related to the density and lattice.
         box = QGroupBox('Setup')
@@ -393,15 +408,10 @@ class InferenceWindow(QMainWindow):
         layout.addRow('Lattice size', layout_)
 
         self.field_lattice_type = QComboBox()
-        self.field_lattice_type.addItems(['rectangle', 'circle'])
+        self.field_lattice_type.addItems(['rectangle', 'circle', 'random'])
         layout.addRow('Lattice type', self.field_lattice_type)
 
-        # Fields related to the generation process.
-        box = QGroupBox('Generation')
-        layout = QFormLayout(box)
-        main_layout.addWidget(box)
-
-        self.field_model = QLineEdit('.pth')
+        self.field_model = QLineEdit('model_5conv_res.pth')
         layout.addRow('Model', self.field_model)
 
         self.field_batch_size = QSpinBox()
@@ -411,20 +421,6 @@ class InferenceWindow(QMainWindow):
         self.checkbox_screenshot = QCheckBox('Screenshot each batch')
         layout.addRow(self.checkbox_screenshot)
 
-        self.button_generate = QPushButton('Generate')
-        self.button_generate.clicked.connect(self.generate)
-        self.button_clear = QPushButton('Clear')
-        self.button_clear.clicked.connect(self.clear)
-        layout_ = QHBoxLayout()
-        layout_.setSpacing(0)
-        layout_.addWidget(self.button_generate)
-        layout_.addWidget(self.button_clear)
-        layout.addRow(layout_)
-
-        self.label_runtime = QLabel()
-        self.label_runtime.setAlignment(Qt.AlignCenter)
-        layout.addRow(self.label_runtime)
-
         # Fields related to the camera.
         box = QGroupBox('Camera')
         layout = QFormLayout(box)
@@ -432,9 +428,9 @@ class InferenceWindow(QMainWindow):
 
         layout_ = QHBoxLayout()
         layout_.setSpacing(0)
-        self.button_decrease_azimuth = QPushButton('−')
+        self.button_decrease_azimuth = QPushButton('◀')
         self.button_decrease_azimuth.clicked.connect(self.azimuth)
-        self.button_increase_azimuth = QPushButton('+')
+        self.button_increase_azimuth = QPushButton('▶')
         self.button_increase_azimuth.clicked.connect(self.azimuth)
         layout_.addWidget(self.button_decrease_azimuth)
         layout_.addWidget(self.button_increase_azimuth)
@@ -442,9 +438,9 @@ class InferenceWindow(QMainWindow):
         
         layout_ = QHBoxLayout()
         layout_.setSpacing(0)
-        self.button_decrease_elevation = QPushButton('−')
+        self.button_decrease_elevation = QPushButton('▼')
         self.button_decrease_elevation.clicked.connect(self.elevation)
-        self.button_increase_elevation = QPushButton('+')
+        self.button_increase_elevation = QPushButton('▲')
         self.button_increase_elevation.clicked.connect(self.elevation)
         layout_.addWidget(self.button_decrease_elevation)
         layout_.addWidget(self.button_increase_elevation)
@@ -511,7 +507,6 @@ class InferenceWindow(QMainWindow):
             tic = time.time()
             locations_1, locations_2, diameters = next(self.generator)
             toc = time.time()
-            self.label_runtime.setText(f"Generated in {toc - tic:.2f} seconds.")
         except StopIteration:
             self.button_generate.setEnabled(False)
         else:
@@ -521,6 +516,7 @@ class InferenceWindow(QMainWindow):
 
             if self.batch == 0:
                 self.reset()
+            self.label_runtime.setText(f"Generated in {toc - tic:.2f} s; total {len(self.dataset)} struts")
         
         if self.checkbox_screenshot.isChecked():
             self.save_screenshot()

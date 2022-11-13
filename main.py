@@ -252,6 +252,7 @@ def train(
     
     return model
 
+@torch.no_grad()
 def test(
     device: str, model: nn.Module, loss_function: nn.Module, test_dataloader: DataLoader,
     queue=None, queue_to_main=None, info_gui: dict=None,
@@ -271,31 +272,30 @@ def test(
     outputs = []
     labels = []
 
-    with torch.no_grad():
-        for batch, (input_data, label_data) in enumerate(test_dataloader, 1):
-            try:
-                input_data = input_data.to(device)
-                label_data = label_data.to(device)
-                output_data = model(input_data)
-                loss += loss_function(output_data, label_data).item()
+    for batch, (input_data, label_data) in enumerate(test_dataloader, 1):
+        try:
+            input_data = input_data.to(device)
+            label_data = label_data.to(device)
+            output_data = model(input_data)
+            loss += loss_function(output_data, label_data).item()
 
-                # Convert to NumPy arrays for evaluation metric calculations.
-                input_data = input_data.cpu().detach().numpy()
-                output_data = output_data.cpu().detach().numpy()
-                label_data = label_data.cpu().numpy()
+            # Convert to NumPy arrays for evaluation metric calculations.
+            input_data = input_data.cpu().detach().numpy()
+            output_data = output_data.cpu().detach().numpy()
+            label_data = label_data.cpu().numpy()
 
-                inputs.append(input_data)
-                labels.append(label_data)
-                outputs.append(output_data)
-                
-                if batch % 10 == 0:
-                    print(f"\rBatch {batch}/{len(test_dataloader)}...", end="")
-                    if queue:
-                        info_gui["progress_batch"] = (batch, len(test_dataloader))
-                        queue.put(info_gui)
+            inputs.append(input_data)
+            labels.append(label_data)
+            outputs.append(output_data)
             
-            except KeyboardInterrupt:
-                break
+            if batch % 10 == 0:
+                print(f"\rBatch {batch}/{len(test_dataloader)}...", end="")
+                if queue:
+                    info_gui["progress_batch"] = (batch, len(test_dataloader))
+                    queue.put(info_gui)
+        
+        except KeyboardInterrupt:
+            break
     
     loss /= batch
     print(f"\nTesting loss: {loss:,.2e}")
@@ -316,8 +316,9 @@ def evaluate(outputs: np.ndarray, labels: np.ndarray, inputs: np.ndarray, datase
     
     return results
 
+@torch.no_grad()
 def infer(model: nn.Module, filename_model: str, dataset: Dataset, batch_size: int):
-    """Make predictions using a trained model on data without corresponding labels. Defined as a generator function to allow visualizing intermediate results one by one."""
+    """Make predictions using a trained model on a dataset without corresponding labels. Defined as a generator function to allow visualizing intermediate results one by one."""
 
     checkpoint = load_model(os.path.join(DATASET_FOLDER, filename_model), 'cpu')
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -331,18 +332,10 @@ def infer(model: nn.Module, filename_model: str, dataset: Dataset, batch_size: i
     locations_2 = list([_[1] for _ in dataset.indices])
     yield locations_1, locations_2, diameters
 
-    # Visualize the lattice structure before predicting diameters. Intended to show only the shape of the lattice.
-    # visualize_lattice(locations_1, locations_2, diameters, gui=False, screenshot_filename=f"{0:03}")
-
-    with torch.no_grad():
-        for i, input_ in enumerate(loader, 1):
-            diameter = model(input_)
-            # if i % 10 == 0:
-            #     print(f"Strut {i}/{n}: diameter {diameter}", end='\r')
-            diameters[(i-1)*batch_size:i*batch_size] = diameter.squeeze()
-
-            yield locations_1, locations_2, diameters
-            # visualize_lattice(locations_1, locations_2, diameters, gui=False, screenshot_filename=f"{i:03}")
+    for i, input_ in enumerate(loader, 1):
+        diameter = model(input_)
+        diameters[(i-1)*batch_size:i*batch_size] = diameter.squeeze()
+        yield locations_1, locations_2, diameters
 
 
 def main(
@@ -369,7 +362,6 @@ def main(
     `Optimizer`: An Optimizer subclass to instantiate, not an instance of the class.
     `loss_function`: A callable as an instantiated Module subclass.
 
-    
     `queue`: A Queue used to send information to the GUI.
     `queue_to_main`: A Queue used to receive information from the GUI.
     """
@@ -545,17 +537,17 @@ if __name__ == "__main__":
         "test_model": True,
         "visualize_results": True,
 
-        "train_existing": True,
+        "train_existing": not True,
         "filename_model": "model.pth",
         "save_model_every": 1,
 
-        "epoch_count": 10,
+        "epoch_count": 5,
         "learning_rate": 1e-3,
-        "decay_learning_rate": not True,
+        "decay_learning_rate": False,
         "batch_sizes": (32, 32, 32),
         "data_split": (0.8, 0.1, 0.1),
         
-        "dataset": StrutDataset(1000, p=0.1, normalize_inputs=True, struts=make_struts(1, (11, 11, 11))),
+        "dataset": StrutDataset(1000, p=0.1, normalize_inputs=True),
         "Model": ResNet,
         "Optimizer": torch.optim.Adam,
         "loss_function": nn.MSELoss(),

@@ -182,7 +182,6 @@ class InferenceDataset(torch.utils.data.Dataset):
 
     def __init__(self, density_shape: Tuple[int, int, int], density_function: str, lattice_shape: Tuple[int, int, int], lattice_type: str) -> None:
         super().__init__()
-        assert lattice_type in ('rectangle', 'circle')
 
         # Shape of density matrix.
         h, w, d = density_shape
@@ -299,6 +298,23 @@ class InferenceDataset(torch.utils.data.Dataset):
                                 if np.sqrt((node_2[0]-h/2) ** 2 + (node_2[1]-w/2) ** 2) <= radius:
                                     if (node_1, node_2) not in self.indices and (node_2, node_1) not in self.indices:
                                         self.indices.append((node_1, node_2))
+        
+        elif lattice_type == 'random':
+            min_coordinates = [(size - lattice_size) // 2 for size, lattice_size in zip([h,w,d], lattice_shape)]
+            max_coordinates = [minimum + lattice_size - 1 for minimum, lattice_size in zip(min_coordinates, lattice_shape)]
+
+            node_current = (h // 2, w // 2, d // 2)
+            while random.random() > 1e-4:
+                node_new = [coordinate + offset for coordinate, offset in zip(node_current, random.choices([-1, 0, 1], k=3))]
+                # Check that the new node is not out of bounds.
+                if all(min_ <= coordinate <= max_ for coordinate, min_, max_ in zip(node_new, min_coordinates, max_coordinates)):
+                    # Check if the new strut is a duplicate.
+                    if (node_current, node_new) not in self.indices and (node_new, node_current) not in self.indices:
+                        self.indices.append((node_current, node_new))
+                        node_current = node_new
+        
+        else:
+            raise NotImplementedError()
 
         # Initialize the second channel, which contains the locations of the two nodes that form a strut.
         self.channel_2 = torch.zeros((11, 11, 11))
