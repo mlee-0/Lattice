@@ -27,7 +27,7 @@ def plot_nodes(array: np.ndarray, opacity: float=1.0) -> None:
     # ax.set(xlim=axis_limits, ylim=axis_limits, zlim=axis_limits)
     plt.show()
 
-def visualize_input(array: np.ndarray, opacity: float=0.5, length: float=1.0, use_lighting: bool=False) -> None:
+def visualize_input(array: np.ndarray, opacity: float=1.0, length: float=1.0, use_lighting: bool=False, hide_zeros: bool=False) -> None:
     """Show an interactive visualization window of a 3D input image with values in [0, 255]."""
 
     application = QApplication(sys.argv)
@@ -44,7 +44,7 @@ def visualize_input(array: np.ndarray, opacity: float=0.5, length: float=1.0, us
     for x in range(array.shape[0]):
         for y in range(array.shape[1]):
             for z in range(array.shape[2]):
-                if True: #array[x, y, z] > 0:
+                if not hide_zeros or array[x, y, z] > 0:
                     points.InsertNextPoint(x, y, z)
                     colors.InsertNextTuple([array[x, y, z]] * 3)
 
@@ -95,7 +95,7 @@ def convert_adjacency_to_lattice(array: np.ndarray) -> Tuple[list, list, list]:
     """Convert a 2D adjacency matrix into a tuple of coordinates and diameters."""
 
     coordinates = read_coordinates()
-    node_numbers = make_node_numbers()
+    node_numbers = make_node_numbers(coordinates)
 
     coordinates_1, coordinates_2, diameters = [], [], []
     unique_struts = set()
@@ -261,11 +261,24 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
 
 
 if __name__ == "__main__":
-    inputs = read_pickle('Training_Data_10/inputs.pickle')
-    visualize_input(inputs[0, 0, ...], opacity=1, length=1.0, use_lighting=not True)
+    # inputs = read_pickle('Training_Data_11/inputs.pickle')
+    # visualize_input(inputs[0, 0, ...], opacity=1, length=1.0, use_lighting=not True)
 
-    # lattice = convert_output_to_lattice(read_outputs(3)[2])
-    # visualize_lattice(*lattice)
+    # input_ = read_mat('Training_Data_11/Input_Data/Density_1', 'Density') * 255
+    # plt.figure()
+    # plt.imshow(input_[:, :, 2], cmap='gray')
+    # plt.show()
+    # visualize_input(input_, opacity=1, length=1.0, use_lighting=not True)
+
+    i = 5  #random.randint(1, 100) - 1;  print(i)
+    inputs = read_pickle('Training_Data_11/inputs.pickle') * 255
+    outputs = read_outputs(i+1)
+    inputs = apply_mask_inputs(inputs, outputs)
+    inputs[inputs <= 128] = 0
+    lattice = convert_output_to_lattice(outputs[-1])
+    lattice = list(zip(*[_ for _ in zip(*lattice) if _[-1] > 0.5]))
+    visualize_lattice(*lattice)
+    visualize_input(inputs[i, 0, ...], hide_zeros=True)
 
     # graphs = read_pickle('Training_Data_10/graphs.pickle')
     # lattice = convert_graph_to_lattice(graphs[0])

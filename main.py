@@ -547,7 +547,7 @@ if __name__ == "__main__":
         "batch_sizes": (32, 32, 32),
         "data_split": (0.8, 0.1, 0.1),
         
-        "dataset": StrutDataset(1000, p=0.1, normalize_inputs=True),
+        "dataset": StrutDataset(p=0.1, normalize_inputs=True),
         "Model": ResNet,
         "Optimizer": torch.optim.Adam,
         "loss_function": nn.MSELoss(),

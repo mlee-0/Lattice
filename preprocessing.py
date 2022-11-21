@@ -17,7 +17,7 @@ import torch
 try:
     from google.colab import drive  # type: ignore
 except ImportError:
-    DATASET_FOLDER = 'Training_Data_10'
+    DATASET_FOLDER = 'Training_Data_11'
 else:
     drive.mount('/content/drive')
     DATASET_FOLDER = 'drive/My Drive/Lattice'
@@ -31,10 +31,11 @@ STRUT_NEIGHBORHOOD_RADIUS = int((STRUT_NEIGHBORHOOD-1) / 2)
 
 
 def read_coordinates() -> List[List[int]]:
-    """Return a list of lists of X, Y, Z coordinates."""
+    """Return a list of lists of X, Y, Z coordinates corresponding to each node."""
 
     filename = 'Input_Coords.txt'
     with open(os.path.join(DATASET_FOLDER, filename), 'r') as f:
+        # Ignore the header line.
         lines = f.readlines()[1:]
     
     coordinates = []
@@ -43,19 +44,13 @@ def read_coordinates() -> List[List[int]]:
 
     return coordinates
 
-def make_node_numbers() -> np.ndarray:
-    """Return a 3D array of node numbers starting from 1 defined in the text file."""
+def make_node_numbers(coordinates: list) -> np.ndarray:
+    """Return a 3D array of node numbers starting from 1 arranged according to the given list of coordinates."""
     
-    filename = 'Input_Coords.txt'
-    with open(os.path.join(DATASET_FOLDER, filename), 'r') as f:
-        # Ignore the header line.
-        lines = f.readlines()[1:]
-    
-    size = round(len(lines) ** (1/3))
+    size = round(len(coordinates) ** (1/3))
     numbers = np.zeros([size]*3, dtype=np.int32)
 
-    for number, line in enumerate(lines, 1):
-        x, y, z = [int(_) for _ in line.strip().split(',')]
+    for number, (x, y, z) in enumerate(coordinates, 1):
         numbers[x, y, z] = number
     assert np.all(numbers > 0)
 
@@ -77,31 +72,32 @@ def read_inputs(count: int=None) -> torch.Tensor:
     """Return input images as a 5D tensor with shape (number of data, 1 channel, height, width, depth)."""
     
     directory = os.path.join(DATASET_FOLDER, 'Input_Data')
-    folders = next(os.walk(directory))[1]
-    folders.sort(key=lambda folder: int(folder.split('_')[1]))
+
+    files = glob.glob(os.path.join(directory, '*.mat'))
+    files.sort(key=lambda file: int(os.path.basename(file).split('.')[0].split('_')[1]))
 
     if count is not None:
-        folders = folders[:count]
+        files = files[:count]
 
-    data_type = np.int16
-    inputs = np.empty((len(folders), 1, *INPUT_SHAPE), dtype=data_type)
-
-    for i, folder in enumerate(folders):
+    data_type = float
+    inputs = np.empty((len(files), 1, *INPUT_SHAPE), dtype=data_type)
+    for i, file in enumerate(files):
         if i % 10 == 0:
-            print(f"Reading images in {folder}...", end='\r' if i < len(folders) - 1 else None)
-
-        files = glob.glob(os.path.join(directory, folder, '*.jpg'))
-        files.sort(key=lambda file: int(os.path.basename(file).split('.')[0].split('_')[1]))
-
-        # Concatenate each image.
-        for d, file in enumerate(files):
-            with Image.open(file) as f:
-                # Transpose image so that X corresponds to image width and Y corresponds to image height.
-                inputs[i, 0, ..., d] = np.asarray(f, dtype=data_type).transpose()
-
+            print(f"Reading file {file}...", end='\r' if i < len(files) - 1 else None)
+        inputs[i, 0, ...] = read_mat(file, 'Density')
     inputs = torch.tensor(inputs)
 
     return inputs
+
+def read_mat(file: str, key: str) -> np.ndarray:
+    """Return the item stored with the given key from a .mat file."""
+    
+    from scipy.io import loadmat
+
+    # Returns a dictionary.
+    data = loadmat(file)
+    
+    return data[key]
 
 def read_outputs(count: int=None) -> List[List[Tuple[int, int]]]:
     """Return nonzero-diameter output data as a list of lists of 2-tuples: (strut number, nonzero diameter). Duplicate struts are not included, and all strut numbers correspond to node numbers in increasing order (node 1 < node 2)."""
@@ -192,7 +188,8 @@ def apply_mask_inputs(inputs: torch.Tensor, outputs: list):
     """Replace density values outside the predefined volume of space with some constant value."""
 
     struts = read_struts()
-    node_numbers = make_node_numbers()
+    coordinates = read_coordinates()
+    node_numbers = make_node_numbers(coordinates)
 
     for i, output in enumerate(outputs):
         mask = mask_of_active_nodes([strut for strut, d in output], struts, node_numbers)
@@ -262,7 +259,8 @@ def augment_outputs(outputs: list, augmentations: int=None):
     print(f"Augmenting outputs...")
     rotations, axes = cube_rotations(augmentations)
 
-    node_numbers = make_node_numbers()
+    coordinates = read_coordinates()
+    node_numbers = make_node_numbers(coordinates)
     struts = read_struts()
     strut_indices = {strut: index for index, strut in enumerate(struts)}
 
@@ -297,11 +295,8 @@ def augment_outputs(outputs: list, augmentations: int=None):
 def convert_outputs_to_struts(outputs: list) -> List[Tuple[int, Tuple[int, int, int], Tuple[int, int, int], float]]:
     """Convert the given output data to a list of tuples containing (input image index, a tuple of (X, Y, Z) coordinates corresponding to node 1 of the strut, a tuple of (X, Y, Z) coordinates corresponding to node 2 of the strut, diameter)."""
 
-    node_numbers = make_node_numbers()
+    coordinates = read_coordinates()
     struts = read_struts()
-
-    # Dictionary of node indices {node: (x, y, z)} to reduce runtime by avoiding search.
-    node_indices = {node_numbers[x, y, z]: (x, y, z) for x in range(node_numbers.shape[0]) for y in range(node_numbers.shape[1]) for z in range(node_numbers.shape[2])}
 
     data = []
     for i, output in enumerate(outputs):
@@ -309,8 +304,8 @@ def convert_outputs_to_struts(outputs: list) -> List[Tuple[int, Tuple[int, int, 
             node_1, node_2 = struts[strut - 1]
             data.append((
                 i,
-                node_indices[node_1],
-                node_indices[node_2],
+                coordinates[node_1 - 1],
+                coordinates[node_2 - 1],
                 d,
             ))
     
@@ -419,11 +414,11 @@ def write_pickle(data: Any, path: str) -> None:
 if __name__ == "__main__":
     inputs = read_inputs()
     outputs = read_outputs()
-    inputs = augment_inputs(inputs)
-    outputs = augment_outputs(outputs)
-    outputs_local = convert_outputs_to_struts(outputs)
-    write_pickle(inputs, 'Training_Data_10/inputs.pickle')
-    write_pickle(outputs_local, 'Training_Data_10/outputs_local.pickle')
+    # inputs = augment_inputs(inputs)
+    # outputs = augment_outputs(outputs)
+    outputs = convert_outputs_to_struts(outputs)
+    write_pickle(inputs, 'Training_Data_11/inputs.pickle')
+    write_pickle(outputs, 'Training_Data_11/outputs.pickle')
 
     # masked_inputs = apply_mask_inputs(inputs, outputs)
     # adjacency = convert_outputs_to_adjacency(outputs)
