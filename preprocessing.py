@@ -85,7 +85,10 @@ def read_inputs(count: int=None) -> torch.Tensor:
         if i % 10 == 0:
             print(f"Reading file {file}...", end='\r' if i < len(files) - 1 else None)
         inputs[i, 0, ...] = read_mat(file, 'Density')
+    
     inputs = torch.tensor(inputs)
+    # Fix the order of the dimensions.
+    inputs = torch.transpose(inputs, 2, 3)
 
     return inputs
 

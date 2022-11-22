@@ -32,6 +32,41 @@ class StrutDataset(torch.utils.data.Dataset):
         self.inputs = read_pickle(os.path.join(DATASET_FOLDER, 'inputs.pickle')).float()
         self.outputs = read_pickle(os.path.join(DATASET_FOLDER, 'outputs.pickle'))
 
+        # Trying different rotations in case data is rotated incorrectly (it's not)
+        """
+        [(0, 0, 0), (0, 0, 1), (0, 0, 2), (0, 0, 3), (0, 1, 0), (0, 1, 1), (0, 1, 2), (0, 1, 3), (0, 2, 0), (0, 2, 1), (0, 2, 2), (0, 2, 3), (0, 3, 0), (0, 3, 1), (0, 3, 2), (0, 3, 3), (1, 0, 0), (1, 0, 1), (1, 0, 2), (1, 0, 3), (1, 2, 0), (1, 2, 1), (1, 2, 2), (1, 2, 3)]
+
+        ((0, 1), (1, 2), (0, 2))
+
+        No rotation: 0.082
+        (0, 0, 1): 0.122
+        (0, 0, 2): 0.110
+        (0, 0, 3): 0.111
+        (0, 1, 0): 0.112
+        (0, 1, 1): 0.108
+        (0, 1, 2): 0.109
+        (0, 1, 3): 0.097
+        (0, 2, 0): 0.120
+        (0, 2, 1): 0.111
+        (0, 2, 2): 0.085 *
+        (0, 2, 3): 0.126
+        (0, 3, 0): 0.113
+        (0, 3, 1): 0.105
+        (0, 3, 2): 0.112
+        (0, 3, 3): 0.112
+        (1, 0, 0): 0.091
+        (1, 0, 1): 0.123
+        (1, 0, 2): 0.109
+        (1, 0, 3): 0.084
+        (1, 2, 0): 0.103
+        (1, 2, 1): 0.108
+        (1, 2, 2): 0.071 *
+        (1, 2, 3): 0.159
+        """
+        # self.inputs = torch.rot90(self.inputs, 1, (2, 3))
+        # self.inputs = torch.rot90(self.inputs, 2, (3, 4))
+        # self.inputs = torch.rot90(self.inputs, 2, (2, 4))
+
         if count is not None:
             self.inputs = self.inputs[:count, ...]
             self.outputs = [_ for _ in self.outputs if _[0] < count]

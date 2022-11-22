@@ -224,7 +224,11 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         tube.SetNumberOfSides(4)
 
         data.AddInputConnection(tube.GetOutputPort())
-        
+    
+    # outline = vtk.vtkOutlineSource()
+    # outline.SetBounds(0, 10, 0, 10, 0, 10)
+    # data.AddInputConnection(outline.GetOutputPort())
+
     mapper = vtk.vtkPolyDataMapper()
     mapper.SetInputConnection(data.GetOutputPort())
     actor = vtk.vtkActor()
@@ -283,3 +287,11 @@ if __name__ == "__main__":
     # graphs = read_pickle('Training_Data_10/graphs.pickle')
     # lattice = convert_graph_to_lattice(graphs[0])
     # visualize_lattice(*lattice)
+
+    # Show struts used in centered strut dataset
+    # struts = make_struts(2, (11,)*3)
+    # print(struts)
+    # locations_1 = [_[0] for _ in struts]
+    # locations_2 = [_[1] for _ in struts]
+    # diameters = [0.25] * len(struts)
+    # visualize_lattice(locations_1, locations_2, diameters, gui=1)
