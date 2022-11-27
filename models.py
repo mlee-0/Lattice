@@ -91,7 +91,7 @@ class ResNetMasked(Module):
     def __init__(self) -> None:
         super().__init__()
 
-        input_channels = 1
+        input_channels = 2
 
         # Number of output channels in the first layer.
         c = 4
@@ -111,24 +111,23 @@ class ResNetMasked(Module):
             BatchNorm3d(c*1),
             ReLU(inplace=True),
         )
-        # self.convolution_4 = Sequential(
-        #     Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-        #     BatchNorm3d(c*1),
-        #     ReLU(inplace=True),
-        # )
-        # self.convolution_5 = Sequential(
-        #     Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-        #     BatchNorm3d(c*1),
-        #     ReLU(inplace=True),
-        # )
+        self.convolution_4 = Sequential(
+            Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*1),
+            ReLU(inplace=True),
+        )
+        self.convolution_5 = Sequential(
+            Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*1),
+            ReLU(inplace=True),
+        )
 
         self.residual_1 = residual(c*1, c*1)
         self.residual_2 = residual(c*1, c*1)
         self.residual_3 = residual(c*1, c*1)
-        # self.residual_4 = residual(c*1, c*1)
-        # self.residual_5 = residual(c*1, c*1)
+        self.residual_4 = residual(c*1, c*1)
+        self.residual_5 = residual(c*1, c*1)
 
-        # self.pooling = AdaptiveAvgPool3d(output_size=(1, 1, 1))
         self.linear = Linear(in_features=c*1, out_features=1)
 
     def forward(self, x, coordinates):
@@ -147,12 +146,12 @@ class ResNetMasked(Module):
 
         (x1, y1, z1), (x2, y2, z2) = coordinates
         batch_indices = torch.arange(batch_size)
+        # Take the average of two voxels in each channel.
         x = (x[batch_indices, :, x1, y1, z1] + x[batch_indices, :, x2, y2, z2]) / 2
         # x = torch.mean([
         #     x[batch_indices, :, x1, y1, z1],
         #     x[batch_indices, :, x2, y2, z2],
         # ], dim=0)
-        # x = self.pooling(x)
         x = self.linear(x.view(batch_size, -1))
 
         return x

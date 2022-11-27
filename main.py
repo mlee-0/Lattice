@@ -113,10 +113,10 @@ def train(
         loss = 0
 
         try:
-            for batch, (input_data, label_data) in enumerate(train_dataloader, 1):
+            for batch, (input_data, coordinates, label_data) in enumerate(train_dataloader, 1):
                 input_data = input_data.to(device)
                 label_data = label_data.to(device)
-                output_data = model(input_data)
+                output_data = model(input_data, coordinates)
 
                 # Calculate the loss.
                 loss_current = loss_function(output_data, label_data)
@@ -163,10 +163,10 @@ def train(
         outputs = []
         labels = []
         with torch.no_grad():
-            for batch, (input_data, label_data) in enumerate(validate_dataloader, 1):
+            for batch, (input_data, coordinates, label_data) in enumerate(validate_dataloader, 1):
                 input_data = input_data.to(device)
                 label_data = label_data.to(device)
-                output_data = model(input_data)
+                output_data = model(input_data, coordinates)
                 loss += loss_function(output_data, label_data).item()
 
                 # Convert to NumPy arrays for evaluation metric calculations.
@@ -272,11 +272,11 @@ def test(
     outputs = []
     labels = []
 
-    for batch, (input_data, label_data) in enumerate(test_dataloader, 1):
+    for batch, (input_data, coordinates, label_data) in enumerate(test_dataloader, 1):
         try:
             input_data = input_data.to(device)
             label_data = label_data.to(device)
-            output_data = model(input_data)
+            output_data = model(input_data, coordinates)
             loss += loss_function(output_data, label_data).item()
 
             # Convert to NumPy arrays for evaluation metric calculations.
@@ -486,9 +486,9 @@ def main(
 
             metrics.plot_histograms(outputs, labels, bins=20)
             metrics.plot_predicted_vs_true(outputs, labels)
-            # metrics.plot_error_by_angle(outputs, labels, locations_1, locations_2)
-            # metrics.plot_error_by_edge_distance(outputs, labels, locations_1, locations_2)
-            # metrics.plot_error_by_xy_edge_distance(outputs, labels, locations_1, locations_2)
+            metrics.plot_error_by_angle(outputs, labels, locations_1, locations_2)
+            metrics.plot_error_by_edge_distance(outputs, labels, locations_1, locations_2)
+            metrics.plot_error_by_xy_edge_distance(outputs, labels, locations_1, locations_2)
 
             # # If predicting local strut diameters, visualize the predictions on all struts in a single lattice structure.
             # dataset.p = 1.0
@@ -544,11 +544,11 @@ if __name__ == "__main__":
         "epoch_count": 5,
         "learning_rate": 1e-3,
         "decay_learning_rate": False,
-        "batch_sizes": (32, 32, 32),
+        "batch_sizes": (64, 64, 64),
         "data_split": (0.8, 0.1, 0.1),
         
-        "dataset": StrutDataset(p=0.1, normalize_inputs=True),
-        "Model": ResNet,
+        "dataset": StrutDataset(p=0.25, normalize_inputs=True),
+        "Model": ResNetMasked,
         "Optimizer": torch.optim.Adam,
         "loss_function": nn.MSELoss(),
     }
