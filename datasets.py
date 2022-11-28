@@ -66,6 +66,9 @@ class StrutDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         # Return the coordinates of the two nodes in addition to the inputs and outputs.
         image_index, (x1, y1, z1), (x2, y2, z2), diameter = self.outputs[index]
+        self.inputs[image_index, 1, ...] = 0
+        self.inputs[image_index, 1, x1, y1, z1] = 1
+        self.inputs[image_index, 1, x2, y2, z2] = 1
         return torch.clone(self.inputs[image_index, ...]), ((x1, y1, z1), (x2, y2, z2)), torch.clone(self.diameters[index, :])
 
     # def __getitem__(self, index):
