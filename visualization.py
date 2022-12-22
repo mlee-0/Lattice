@@ -28,46 +28,14 @@ def plot_nodes(array: np.ndarray, opacity: float=1.0) -> None:
     plt.show()
 
 def visualize_input(array: np.ndarray, opacity: float=1.0, length: float=1.0, use_lighting: bool=False, hide_zeros: bool=False) -> None:
-    """Show an interactive visualization window of a 3D input image with values in [0, 255]."""
+    """Show an interactive visualization window of a 3D or 4D input image with values in [0, 255]. If 4D, the color dimension must be the fourth dimension, with shape (h, w, d, 3)."""
 
     application = QApplication(sys.argv)
     gui = InferenceWindow()
     ren = gui.ren
     window = gui.renwin
 
-    array = np.array(array)
-    
-    points = vtk.vtkPoints()
-    colors = vtk.vtkUnsignedCharArray()
-    colors.SetNumberOfComponents(3)
-    colors.SetName("colors")
-    for x in range(array.shape[0]):
-        for y in range(array.shape[1]):
-            for z in range(array.shape[2]):
-                if not hide_zeros or array[x, y, z] > 0:
-                    points.InsertNextPoint(x, y, z)
-                    colors.InsertNextTuple([array[x, y, z]] * 3)
-
-    data = vtk.vtkPolyData()
-    data.SetPoints(points)
-    data.GetPointData().AddArray(colors)
-
-    glyph = vtk.vtkCubeSource()
-    glyph.SetXLength(length)
-    glyph.SetYLength(length)
-    glyph.SetZLength(length)
-    mapper = vtk.vtkGlyph3DMapper()
-    mapper.SetSourceConnection(glyph.GetOutputPort())
-    mapper.SetInputData(data)
-    mapper.SetScalarModeToUsePointFieldData()
-    mapper.SelectColorArray("colors")
-    mapper.Update()
-
-    actor = vtk.vtkActor()
-    actor.SetMapper(mapper)
-    actor.GetProperty().SetLineWidth(1)
-    actor.GetProperty().SetOpacity(opacity)
-    actor.GetProperty().SetLighting(use_lighting)
+    actor = make_actor_input(array, opacity, length, use_lighting, hide_zeros)
     ren.AddActor(actor)
 
     ren.ResetCamera()
@@ -161,6 +129,50 @@ def convert_graph_to_lattice(graph) -> Tuple[list, list, list]:
         diameters.append(graph.y[i])
 
     return coordinates_1, coordinates_2, diameters
+
+def make_actor_input(array: np.ndarray, opacity: float=1.0, length: float=1.0, use_lighting: bool=False, hide_zeros: bool=False):
+    """Return an actor of a voxel model."""
+
+    array = np.array(array)
+    
+    points = vtk.vtkPoints()
+    colors = vtk.vtkUnsignedCharArray()
+    colors.SetNumberOfComponents(3)
+    colors.SetName("colors")
+    for x in range(array.shape[0]):
+        for y in range(array.shape[1]):
+            for z in range(array.shape[2]):
+                if array.ndim == 3:
+                    if not hide_zeros or array[x, y, z] > 0:
+                        points.InsertNextPoint(x, y, z)
+                        colors.InsertNextTuple([array[x, y, z]] * 3)
+                else:
+                    if not hide_zeros or (array[x, y, z, :] == 0).all():
+                        points.InsertNextPoint(x, y, z)
+                        colors.InsertNextTuple(list(array[x, y, z, :]))
+
+    data = vtk.vtkPolyData()
+    data.SetPoints(points)
+    data.GetPointData().AddArray(colors)
+
+    glyph = vtk.vtkCubeSource()
+    glyph.SetXLength(length)
+    glyph.SetYLength(length)
+    glyph.SetZLength(length)
+    mapper = vtk.vtkGlyph3DMapper()
+    mapper.SetSourceConnection(glyph.GetOutputPort())
+    mapper.SetInputData(data)
+    mapper.SetScalarModeToUsePointFieldData()
+    mapper.SelectColorArray("colors")
+    mapper.Update()
+
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+    actor.GetProperty().SetLineWidth(1)
+    actor.GetProperty().SetOpacity(opacity)
+    actor.GetProperty().SetLighting(use_lighting)
+
+    return actor
 
 def make_actor_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float], resolution: int=5):
     """Return an actor of a lattice."""
@@ -281,7 +293,7 @@ if __name__ == "__main__":
     inputs[inputs <= 128] = 0
     lattice = convert_output_to_lattice(outputs[-1])
     lattice = list(zip(*[_ for _ in zip(*lattice) if _[-1] > 0.5]))
-    visualize_lattice(*lattice)
+    # visualize_lattice(*lattice)
     visualize_input(inputs[i, 0, ...], hide_zeros=True)
 
     # graphs = read_pickle('Training_Data_10/graphs.pickle')

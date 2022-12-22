@@ -378,7 +378,7 @@ class InferenceWindow(QMainWindow):
         self.field_density_width.setRange(5, 100)
         self.field_density_depth.setRange(5, 100)
         self.field_density_height.setValue(20)
-        self.field_density_width.setValue(20)
+        self.field_density_width.setValue(40)
         self.field_density_depth.setValue(20)
         layout_ = QHBoxLayout()
         layout_.setSpacing(0)
@@ -388,7 +388,7 @@ class InferenceWindow(QMainWindow):
         layout.addRow('Density size', layout_)
 
         self.field_density_function = QComboBox()
-        self.field_density_function.addItems(['linear', 'sin', 'cos', 'exp', 'random'])
+        self.field_density_function.addItems(['linear', 'sin', 'cos', 'exp', 'random', 'stress'])
         layout.addRow('Density function', self.field_density_function)
 
         self.field_lattice_height = QSpinBox()
@@ -397,9 +397,9 @@ class InferenceWindow(QMainWindow):
         self.field_lattice_height.setRange(1, 100)
         self.field_lattice_width.setRange(1, 100)
         self.field_lattice_depth.setRange(1, 100)
-        self.field_lattice_height.setValue(5)
-        self.field_lattice_width.setValue(5)
-        self.field_lattice_depth.setValue(5)
+        self.field_lattice_height.setValue(15)
+        self.field_lattice_width.setValue(30)
+        self.field_lattice_depth.setValue(15)
         layout_ = QHBoxLayout()
         layout_.setSpacing(0)
         layout_.addWidget(self.field_lattice_height)
@@ -411,7 +411,7 @@ class InferenceWindow(QMainWindow):
         self.field_lattice_type.addItems(['rectangle', 'circle', 'random'])
         layout.addRow('Lattice type', self.field_lattice_type)
 
-        self.field_model = QLineEdit('model_5conv_res.pth')
+        self.field_model = QLineEdit('model.pth')
         layout.addRow('Model', self.field_model)
 
         self.field_batch_size = QSpinBox()
@@ -462,7 +462,7 @@ class InferenceWindow(QMainWindow):
         self.ren.GetActiveCamera().SetParallelProjection(True)
 
         return widget
-    
+
     def save_screenshot(self):
         filter = vtk.vtkWindowToImageFilter()
         filter.SetInput(self.renwin)
@@ -518,11 +518,15 @@ class InferenceWindow(QMainWindow):
                 self.reset()
             self.label_runtime.setText(f"Generated in {toc - tic:.2f} s; total {len(self.dataset)} struts")
         
+        # Show density.
+        # actor_density = make_actor_input((self.dataset.density * 41.9801) + 127.4493)
+        # self.set_actor(actor_density)
+
         if self.checkbox_screenshot.isChecked():
             self.save_screenshot()
         
         self.iren.Render()
-    
+
     def clear(self):
         """Remove generated data."""
         self.ren.RemoveActor(self.actor)

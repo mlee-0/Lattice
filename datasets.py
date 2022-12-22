@@ -221,6 +221,49 @@ class InferenceDataset(torch.utils.data.Dataset):
             self.density *= (density_range[1] - density_range[0])
             self.density += density_range[0]
             self.density *= 255
+        
+        elif density_function == 'stress':
+            self.density = read_pickle(os.path.join(DATASET_FOLDER, 'stress.pickle'))
+            self.density -= self.density.min()
+            self.density /= self.density.max()
+            self.density *= 255
+
+            self.density = np.pad(self.density, (6, 6), mode='maximum')
+            density_shape = self.density.shape
+
+            # from main import load_model
+            # from models import Nie
+
+            # density_shape = (15, 30, 15)
+
+            # h, w, d = 20, 40, 30
+            # input_data = np.zeros((1, 4, 20, 40))
+            # input_data[:, 0, :h, :w] = 255
+            # input_data[:, 1, :h, :d] = 255
+            # input_data[:, 2, :h//2, w//2] = 255
+            # input_data[:, 3, h//2, w//2:] = 255
+            # # plt.figure()
+            # # plt.subplot(2, 2, 1); plt.imshow(input_data[0, 0, ...])
+            # # plt.subplot(2, 2, 2); plt.imshow(input_data[0, 1, ...])
+            # # plt.subplot(2, 2, 3); plt.imshow(input_data[0, 2, ...])
+            # # plt.subplot(2, 2, 4); plt.imshow(input_data[0, 3, ...])
+            # # plt.show()
+            # input_data = torch.tensor(input_data).float()
+            # # Normalize based on the mean and standard deviation of the original dataset.
+            # input_data -= 42.1984
+            # input_data /= 94.2048
+
+            # checkpoint = load_model(os.path.join(DATASET_FOLDER, 'stress_model.pth'), 'cpu')
+            # stress_model = Nie(4, (20, 40), 15)
+            # stress_model.load_state_dict(checkpoint['model_state_dict'])
+            # stress_model.train(False)
+            # with torch.no_grad():
+            #     self.density = stress_model(input_data)
+            #     self.density **= 1 / (1/1.8)
+            #     # Scale to (_, 1) to exaggerate the contrast.
+            #     self.density /= self.density.max()
+            #     self.density *= 255
+            # self.density = self.density[0, ...].numpy().transpose((1, 2, 0))
 
         # visualize_input(self.density, opacity=1.0)
 

@@ -268,3 +268,115 @@ class MLP(Module):
     
 #     def forward(self, density, edge_index):
 #         x = self.convolution_1(density)
+
+class Nie(torch.nn.Module):
+    """Based on: https://arxiv.org/pdf/1808.08914.pdf"""
+
+    def __init__(self, input_channels: int, input_size: Tuple[int, int], output_channels: int):
+        super().__init__()
+
+        TRACK_RUNNING_STATS = False
+        MOMENTUM = 0.1
+
+        # Number of features in the output of the first layer.
+        nf = 32
+
+        self.convolution_1 = torch.nn.Sequential(
+            torch.nn.Conv2d(input_channels, nf*1, kernel_size=9, stride=1, padding="same", padding_mode="zeros"),
+            torch.nn.BatchNorm2d(nf*1, momentum=MOMENTUM, track_running_stats=TRACK_RUNNING_STATS),
+            torch.nn.ReLU(inplace=True),
+        )
+        # Reduces both the height and width by half.
+        self.convolution_2 = torch.nn.Sequential(
+            torch.nn.Conv2d(nf*1, nf*2, kernel_size=4, stride=2, padding=1, padding_mode="zeros"),
+            torch.nn.BatchNorm2d(nf*2, momentum=MOMENTUM, track_running_stats=TRACK_RUNNING_STATS),
+            torch.nn.ReLU(inplace=True),
+        )
+        # Reduces both the height and width by half.
+        self.convolution_3 = torch.nn.Sequential(
+            torch.nn.Conv2d(nf*2, nf*4, kernel_size=4, stride=2, padding=1, padding_mode="zeros"),
+            torch.nn.BatchNorm2d(nf*4, momentum=MOMENTUM, track_running_stats=TRACK_RUNNING_STATS),
+            torch.nn.ReLU(inplace=True),
+        )
+
+        # Convenience functions for returning residual blocks and squeeze-and-excitation blocks.
+        residual_block = lambda: torch.nn.Sequential(
+            torch.nn.Conv2d(nf*4, nf*4, kernel_size=3, padding="same"),
+            torch.nn.ReLU(inplace=False),
+            torch.nn.BatchNorm2d(nf*4, momentum=MOMENTUM, track_running_stats=TRACK_RUNNING_STATS),
+            torch.nn.Conv2d(nf*4, nf*4, kernel_size=3, padding="same"),
+            torch.nn.BatchNorm2d(nf*4, momentum=MOMENTUM, track_running_stats=TRACK_RUNNING_STATS),
+        )
+        se_block = lambda kernel_size: torch.nn.Sequential(
+            torch.nn.AvgPool2d(kernel_size=kernel_size),
+            torch.nn.Flatten(),
+            torch.nn.Linear(nf*4, nf*4//16),
+            torch.nn.ReLU(inplace=False),
+            torch.nn.Linear(nf*4//16, nf*4),
+            torch.nn.Sigmoid(),
+        )
+        
+        output_size_residual = (round(input_size[0] / 2 / 2), round(input_size[1] / 2 / 2))
+        self.residual_1 = residual_block()
+        self.se_1 = se_block(output_size_residual)
+        self.residual_2 = residual_block()
+        self.se_2 = se_block(output_size_residual)
+        self.residual_3 = residual_block()
+        self.se_3 = se_block(output_size_residual)
+        self.residual_4 = residual_block()
+        self.se_4 = se_block(output_size_residual)
+        self.residual_5 = residual_block()
+        self.se_5 = se_block(output_size_residual)
+
+        self.deconvolution_1 = torch.nn.Sequential(
+            torch.nn.ConvTranspose2d(nf*4, nf*2, kernel_size=(4,2), stride=(1,2), padding=(0,2), output_padding=(0,0), padding_mode="zeros"),
+            torch.nn.ReLU(inplace=True),
+            torch.nn.BatchNorm2d(nf*2, momentum=MOMENTUM, track_running_stats=TRACK_RUNNING_STATS),
+        )
+        self.deconvolution_2 = torch.nn.Sequential(
+            torch.nn.ConvTranspose2d(nf*2, nf*1, kernel_size=(3,2), stride=2, padding=1, output_padding=(0,0), padding_mode="zeros"),
+            torch.nn.ReLU(inplace=True),
+            torch.nn.BatchNorm2d(nf*1, momentum=MOMENTUM, track_running_stats=TRACK_RUNNING_STATS),
+        )
+        self.deconvolution_3 = torch.nn.Sequential(
+            torch.nn.Conv2d(nf*1, output_channels, kernel_size=9, stride=1, padding="same", padding_mode="zeros"),
+            # torch.nn.BatchNorm2d(OUTPUT_CHANNELS, momentum=MOMENTUM, track_running_stats=TRACK_RUNNING_STATS),
+            torch.nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x, value_load: float = None):
+        batch_size = x.size(0)
+
+        conv_1 = self.convolution_1(x)
+        conv_2 = self.convolution_2(conv_1)
+        x = self.convolution_3(conv_2)
+        
+        residual = self.residual_1(x)
+        se = self.se_1(residual)
+        x = x + residual * se.reshape((batch_size, -1, 1, 1))
+        residual = self.residual_2(x)
+        se = self.se_2(residual)
+        x = x + residual * se.reshape((batch_size, -1, 1, 1))
+        residual = self.residual_3(x)
+        se = self.se_3(residual)
+        x = x + residual * se.reshape((batch_size, -1, 1, 1))
+        residual = self.residual_4(x)
+        se = self.se_4(residual)
+        x = x + residual * se.reshape((batch_size, -1, 1, 1))
+        residual = self.residual_5(x)
+        se = self.se_5(residual)
+        x = x + residual * se.reshape((batch_size, -1, 1, 1))
+
+        # Add load value.
+        if value_load is not None:
+            x = x + value_load
+
+        x = self.deconvolution_1(x)
+        # x = self.deconvolution_2(conv_2[..., 1:-1, 2:-2] + x)
+        # x = self.deconvolution_3(conv_1[..., 2:-3, 5:-5] + x)
+        # x = self.deconvolution_2(torch.cat((conv_2[..., 1:-1, 2:-2], x), dim=1))
+        # x = self.deconvolution_3(torch.cat((conv_1[..., 2:-3, 5:-5], x), dim=1))
+        x = self.deconvolution_2(x)
+        x = self.deconvolution_3(x)
+    
+        return x
