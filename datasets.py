@@ -62,22 +62,15 @@ class StrutDataset(torch.utils.data.Dataset):
     def __len__(self) -> int:
         return len(self.outputs)
 
-    # Use with ResNetMasked
     def __getitem__(self, index):
-        # Return the coordinates of the two nodes in addition to the inputs and outputs.
+        """If using ResNetMasked, return the coordinates of the two nodes in addition to the inputs and outputs."""
         image_index, (x1, y1, z1), (x2, y2, z2), diameter = self.outputs[index]
+        coordinates = ((x1, y1, z1), (x2, y2, z2))
         self.inputs[image_index, 1, ...] = 0
         self.inputs[image_index, 1, x1, y1, z1] = 1
         self.inputs[image_index, 1, x2, y2, z2] = 1
-        return torch.clone(self.inputs[image_index, ...]), ((x1, y1, z1), (x2, y2, z2)), torch.clone(self.diameters[index, :])
+        return torch.clone(self.inputs[image_index, ...]), torch.clone(self.diameters[index, :]), coordinates
 
-    # def __getitem__(self, index):
-    #     image_index, (x1, y1, z1), (x2, y2, z2), diameter = self.outputs[index]
-    #     self.inputs[image_index, 1, ...] = 0
-    #     self.inputs[image_index, 1, x1, y1, z1] = 1
-    #     self.inputs[image_index, 1, x2, y2, z2] = 1
-    #     return torch.clone(self.inputs[image_index, ...]), torch.clone(self.diameters[index, :])
-    
     def outputs_for_images(self, image_indices: List[int]):
         """Return output data indices corresponding to a list of image indices."""
         image_indices = set(image_indices)

@@ -173,16 +173,16 @@ def plot_adjacency(p, y):
 
 def evaluate(p, y) -> Dict[str, float]:
     results = {
-        'ME': me(p, y),
+        'Mean Error': me(p, y),
         'MAE': mae(p, y),
         # 'MSE': mse(p, y),
         # 'MAE among nonzeros': mae_nonzeros(p, y),
-        'Minimum error': min_error(p, y),
-        'Maximum error': max_error(p, y),
+        'Min error': min_error(p, y),
+        'Max error': max_error(p, y),
         # 'Zeros correct': fraction_of_zeros_correct(p, y),
         # 'Zeros incorrect': fraction_of_zeros_incorrect(p, y),
         'Number of values out of bounds': ((p < 0) + (p > 1)).sum(),
-        'Fraction of values out of bounds': ((p < 0) + (p > 1)).sum() / p.size,
+        # 'Fraction of values out of bounds': ((p < 0) + (p > 1)).sum() / p.size,
     }
     
     return results

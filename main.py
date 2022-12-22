@@ -113,7 +113,7 @@ def train(
         loss = 0
 
         try:
-            for batch, (input_data, coordinates, label_data) in enumerate(train_dataloader, 1):
+            for batch, (input_data, label_data, coordinates) in enumerate(train_dataloader, 1):
                 input_data = input_data.to(device)
                 label_data = label_data.to(device)
                 output_data = model(input_data, coordinates)
@@ -163,7 +163,7 @@ def train(
         outputs = []
         labels = []
         with torch.no_grad():
-            for batch, (input_data, coordinates, label_data) in enumerate(validate_dataloader, 1):
+            for batch, (input_data, label_data, coordinates) in enumerate(validate_dataloader, 1):
                 input_data = input_data.to(device)
                 label_data = label_data.to(device)
                 output_data = model(input_data, coordinates)
@@ -272,7 +272,7 @@ def test(
     outputs = []
     labels = []
 
-    for batch, (input_data, coordinates, label_data) in enumerate(test_dataloader, 1):
+    for batch, (input_data, label_data, coordinates) in enumerate(test_dataloader, 1):
         try:
             input_data = input_data.to(device)
             label_data = label_data.to(device)
@@ -537,12 +537,12 @@ if __name__ == "__main__":
         "test_model": True,
         "visualize_results": True,
 
-        "train_existing": not True,
+        "train_existing": True,
         "filename_model": "model.pth",
         "save_model_every": 1,
 
-        "epoch_count": 5,
-        "learning_rate": 1e-3,
+        "epoch_count": 2,
+        "learning_rate": 1e-4,
         "decay_learning_rate": False,
         "batch_sizes": (64, 64, 64),
         "data_split": (0.8, 0.1, 0.1),
