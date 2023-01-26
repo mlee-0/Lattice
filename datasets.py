@@ -29,8 +29,8 @@ class StrutDataset(torch.utils.data.Dataset):
         super().__init__()
         self.p = p
 
-        self.inputs = read_pickle(os.path.join(DATASET_FOLDER, 'inputs.pickle')).float()
-        self.outputs = read_pickle(os.path.join(DATASET_FOLDER, 'outputs.pickle'))
+        self.inputs = read_pickle(os.path.join(DATASET_FOLDER, 'inputs_augmented.pickle')).float()
+        self.outputs = read_pickle(os.path.join(DATASET_FOLDER, 'outputs_augmented.pickle'))
 
         if count is not None:
             self.inputs = self.inputs[:count, ...]
@@ -40,6 +40,40 @@ class StrutDataset(torch.utils.data.Dataset):
             struts = [sorted(list(_) for _ in strut) for strut in struts]
             self.outputs = [_ for _ in self.outputs if sorted((_[1], _[2])) in struts]
         
+        # # Remove struts within a certain distance from the X=0 and Y=0 edges.
+        # self.outputs = [_ for _ in self.outputs if not any(coordinate in (0, 1) for coordinate in (_[1][:2] + _[2][:2]))]
+
+        # Keep only struts at the center.
+        center_struts = [
+            [[5, 5, 5], [5, 5, 6]],
+            [[5, 5, 4], [5, 5, 6]],
+            [[5, 5, 5], [5, 6, 5]],
+            [[5, 5, 5], [5, 6, 6]],
+            [[5, 5, 4], [5, 6, 6]],
+            [[5, 4, 5], [5, 6, 5]],
+            [[5, 4, 5], [5, 6, 6]],
+            [[5, 4, 4], [5, 6, 6]],
+            [[5, 5, 5], [6, 5, 5]],
+            [[5, 5, 5], [6, 5, 6]],
+            [[5, 5, 4], [6, 5, 6]],
+            [[5, 5, 5], [6, 6, 5]],
+            [[5, 5, 5], [6, 6, 6]],
+            [[5, 5, 4], [6, 6, 6]],
+            [[5, 4, 5], [6, 6, 5]],
+            [[5, 4, 5], [6, 6, 6]],
+            [[5, 4, 4], [6, 6, 6]],
+            [[4, 5, 5], [6, 5, 5]],
+            [[4, 5, 5], [6, 5, 6]],
+            [[4, 5, 4], [6, 5, 6]],
+            [[4, 5, 5], [6, 6, 5]],
+            [[4, 5, 5], [6, 6, 6]],
+            [[4, 5, 4], [6, 6, 6]],
+            [[4, 4, 5], [6, 6, 5]],
+            [[4, 4, 5], [6, 6, 6]],
+            [[4, 4, 4], [6, 6, 6]],
+        ]
+        self.outputs = [_ for _ in self.outputs if [_[1], _[2]] in center_struts]
+
         self.diameters = torch.tensor([output[3] for output in self.outputs])[:, None]
         
         # Normalize input data.

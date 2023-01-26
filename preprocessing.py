@@ -9,7 +9,6 @@ import pickle
 from typing import Any, List, Tuple
 
 import numpy as np
-from PIL import Image
 import torch
 # import torch_geometric
 
@@ -417,11 +416,11 @@ def write_pickle(data: Any, path: str) -> None:
 if __name__ == "__main__":
     inputs = read_inputs()
     outputs = read_outputs()
-    # inputs = augment_inputs(inputs)
-    # outputs = augment_outputs(outputs)
+    inputs = augment_inputs(inputs)
+    outputs = augment_outputs(outputs)
     outputs = convert_outputs_to_struts(outputs)
-    write_pickle(inputs, 'Training_Data_11/inputs.pickle')
-    write_pickle(outputs, 'Training_Data_11/outputs.pickle')
+    write_pickle(inputs, 'Training_Data_11/inputs_augmented.pickle')
+    write_pickle(outputs, 'Training_Data_11/outputs_augmented.pickle')
 
     # masked_inputs = apply_mask_inputs(inputs, outputs)
     # adjacency = convert_outputs_to_adjacency(outputs)

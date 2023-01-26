@@ -541,13 +541,13 @@ if __name__ == "__main__":
         "filename_model": "model.pth",
         "save_model_every": 1,
 
-        "epoch_count": 2,
+        "epoch_count": 5,
         "learning_rate": 1e-4,
         "decay_learning_rate": False,
         "batch_sizes": (64, 64, 64),
         "data_split": (0.8, 0.1, 0.1),
         
-        "dataset": StrutDataset(p=0.25, normalize_inputs=True),
+        "dataset": StrutDataset(p=1.0, normalize_inputs=True),
         "Model": ResNetMasked,
         "Optimizer": torch.optim.Adam,
         "loss_function": nn.MSELoss(),
