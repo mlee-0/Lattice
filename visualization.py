@@ -201,6 +201,13 @@ def make_actor_lattice(locations_1: List[Tuple[float, float, float]], locations_
 
     return actor
 
+def export_stl(actor: vtk.vtkActor, filename: str) -> None:
+    """Export an actor to an STL file."""
+    writer = vtk.vtkSTLWriter()
+    writer.SetFileName(filename)
+    writer.SetInputData(actor.GetMapper().GetInput())
+    writer.Write()
+
 def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float], screenshot_filename: str=None, gui: bool=False) -> None:
     """Show an interactive visualization window of a lattice defined as a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters. All lists must be the same length."""
 

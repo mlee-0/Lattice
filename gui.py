@@ -355,11 +355,14 @@ class InferenceWindow(QMainWindow):
         self.button_generate.clicked.connect(self.generate)
         self.button_clear = QPushButton('Clear')
         self.button_clear.clicked.connect(self.clear)
+        self.button_export = QPushButton('Export')
+        self.button_export.clicked.connect(self.export)
         layout_ = QHBoxLayout()
         layout_.setContentsMargins(0, 0, 0, 0)
         layout_.setSpacing(0)
         layout_.addWidget(self.button_generate)
         layout_.addWidget(self.button_clear)
+        layout_.addWidget(self.button_export)
         main_layout.addLayout(layout_)
 
         self.label_runtime = QLabel()
@@ -511,7 +514,7 @@ class InferenceWindow(QMainWindow):
             self.button_generate.setEnabled(False)
         else:
             self.batch += 1
-            actor = make_actor_lattice(locations_1, locations_2, diameters)
+            actor = make_actor_lattice(locations_1, locations_2, diameters, resolution=10)
             self.set_actor(actor)
 
             if self.batch == 0:
@@ -539,6 +542,11 @@ class InferenceWindow(QMainWindow):
         self.label_runtime.clear()
     
         self.iren.Render()
+
+    def export(self):
+        """Export the actor to an STL file."""
+        if self.actor is not None:
+            export_stl(self.actor, 'export.stl')
 
     def set_actor(self, actor: vtk.vtkActor):
         if self.actor is not None:
