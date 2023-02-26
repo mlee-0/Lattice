@@ -298,6 +298,14 @@ class InferenceDataset(torch.utils.data.Dataset):
             #     self.density /= self.density.max()
             #     self.density *= 255
             # self.density = self.density[0, ...].numpy().transpose((1, 2, 0))
+        
+        elif density_function == 'topology opt.':
+            self.density = read_pickle(os.path.join(DATASET_FOLDER, 'topology_optimization.pickle'))
+            self.density -= self.density.min()
+            self.density /= self.density.max()
+            self.density *= 255
+
+            self.density = np.pad(self.density, (20, 20), mode='edge')
 
         # visualize_input(self.density, opacity=1.0)
 

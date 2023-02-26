@@ -391,7 +391,7 @@ class InferenceWindow(QMainWindow):
         layout.addRow('Density size', layout_)
 
         self.field_density_function = QComboBox()
-        self.field_density_function.addItems(['linear', 'sin', 'cos', 'exp', 'random', 'stress'])
+        self.field_density_function.addItems(['linear', 'sin', 'cos', 'exp', 'random', 'stress', 'topology opt.'])
         layout.addRow('Density function', self.field_density_function)
 
         self.field_lattice_height = QSpinBox()

@@ -179,12 +179,15 @@ def make_actor_lattice(locations_1: List[Tuple[float, float, float]], locations_
 
     data = vtk.vtkAppendPolyData()
 
+    volume = 0
     for i, ((x1, y1, z1), (x2, y2, z2), diameter) in enumerate(zip(locations_1, locations_2, diameters)):
         line = vtk.vtkLineSource()
         line.SetPoint1(x1, y1, z1)
         line.SetPoint2(x2, y2, z2)
         line.SetResolution(0)
         line.Update()
+        dv = (np.pi * (diameter/2) ** 2) * ((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2) ** 0.5
+        volume += dv
 
         radius = diameter / 2
         tube = vtk.vtkTubeFilter()
@@ -193,7 +196,27 @@ def make_actor_lattice(locations_1: List[Tuple[float, float, float]], locations_
         tube.SetNumberOfSides(resolution)
 
         data.AddInputConnection(tube.GetOutputPort())
-        
+    print(f"Volume {volume}, {len(diameters)} struts")
+
+    # # Add spheres at the 8 corners.
+    # x, y, z = list(zip(*(locations_1 + locations_2)))
+    # for x in [6, 10]: #range(np.max(x) + 1):
+    #     for y in [6, 15]: #range(np.max(y) + 1):
+    #         for z in [6, 10]: #range(np.max(z) + 1):
+    #             d = 0
+    #             for node_1, node_2 in zip(locations_1, locations_2):
+    #                 if (x, y, z) == node_1 or (x, y, z) == node_2:
+    #                     d = max(d, diameter)
+
+    #             # Add a sphere with the same size as the largest strut connected to this node.
+    #             sphere = vtk.vtkSphereSource()
+    #             sphere.SetCenter(x, y, z)
+    #             sphere.SetRadius(d / 2)
+    #             sphere.SetThetaResolution(20)
+    #             sphere.SetPhiResolution(20)
+
+    #             data.AddInputConnection(sphere.GetOutputPort())
+
     mapper = vtk.vtkPolyDataMapper()
     mapper.SetInputConnection(data.GetOutputPort())
     actor = vtk.vtkActor()
@@ -284,33 +307,51 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
 
 
 if __name__ == "__main__":
-    # inputs = read_pickle('Training_Data_11/inputs.pickle')
-    # visualize_input(inputs[0, 0, ...], opacity=1, length=1.0, use_lighting=not True)
+    # # inputs = read_pickle('Training_Data_11/inputs.pickle')
+    # # visualize_input(inputs[0, 0, ...], opacity=1, length=1.0, use_lighting=not True)
 
-    # input_ = read_mat('Training_Data_11/Input_Data/Density_1', 'Density') * 255
-    # plt.figure()
-    # plt.imshow(input_[:, :, 2], cmap='gray')
-    # plt.show()
-    # visualize_input(input_, opacity=1, length=1.0, use_lighting=not True)
+    # # input_ = read_mat('Training_Data_11/Input_Data/Density_1', 'Density') * 255
+    # # plt.figure()
+    # # plt.imshow(input_[:, :, 2], cmap='gray')
+    # # plt.show()
+    # # visualize_input(input_, opacity=1, length=1.0, use_lighting=not True)
 
-    i = 5  #random.randint(1, 100) - 1;  print(i)
-    inputs = read_pickle('Training_Data_11/inputs.pickle') * 255
-    outputs = read_outputs(i+1)
-    inputs = apply_mask_inputs(inputs, outputs)
-    inputs[inputs <= 128] = 0
-    lattice = convert_output_to_lattice(outputs[-1])
-    lattice = list(zip(*[_ for _ in zip(*lattice) if _[-1] > 0.5]))
-    # visualize_lattice(*lattice)
-    visualize_input(inputs[i, 0, ...], hide_zeros=True)
+    # i = 5  #random.randint(1, 100) - 1;  print(i)
+    # inputs = read_pickle('Training_Data_11/inputs.pickle') * 255
+    # outputs = read_outputs(i+1)
+    # inputs = apply_mask_inputs(inputs, outputs)
+    # inputs[inputs <= 128] = 0
+    # lattice = convert_output_to_lattice(outputs[-1])
+    # lattice = list(zip(*[_ for _ in zip(*lattice) if _[-1] > 0.5]))
+    # # visualize_lattice(*lattice)
+    # visualize_input(inputs[i, 0, ...], hide_zeros=True)
 
-    # graphs = read_pickle('Training_Data_10/graphs.pickle')
-    # lattice = convert_graph_to_lattice(graphs[0])
-    # visualize_lattice(*lattice)
+    # # graphs = read_pickle('Training_Data_10/graphs.pickle')
+    # # lattice = convert_graph_to_lattice(graphs[0])
+    # # visualize_lattice(*lattice)
 
-    # Show struts used in centered strut dataset
-    # struts = make_struts(2, (11,)*3)
-    # print(struts)
-    # locations_1 = [_[0] for _ in struts]
-    # locations_2 = [_[1] for _ in struts]
-    # diameters = [0.25] * len(struts)
-    # visualize_lattice(locations_1, locations_2, diameters, gui=1)
+    # # Show struts used in centered strut dataset
+    # # struts = make_struts(2, (11,)*3)
+    # # print(struts)
+    # # locations_1 = [_[0] for _ in struts]
+    # # locations_2 = [_[1] for _ in struts]
+    # # diameters = [0.25] * len(struts)
+    # # visualize_lattice(locations_1, locations_2, diameters, gui=1)
+
+    # # Load a .mat file of a lattice generated with GRAND3.
+    # from scipy.io import loadmat
+    # data = loadmat('grand3.mat')
+    # locations_1 = [tuple(_) for _ in data['locations_1'].astype(int)]
+    # locations_2 = [tuple(_) for _ in data['locations_2'].astype(int)]
+    # diameters = list(data['diameters'].squeeze())
+
+    # volume = 0
+    # for (x1, y1, z1), (x2, y2, z2), diameter in zip(locations_1, locations_2, diameters):
+    #     dv = (np.pi * (diameter/2) ** 2) * ((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2) ** 0.5
+    #     volume += dv
+    # print(f"Volume of {volume}, {len(diameters)} struts")
+
+    from scipy.io import loadmat
+    data = loadmat('top.mat')
+    density = data['x']
+    write_pickle(density, 'topology_optimization.pickle')
