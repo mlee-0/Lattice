@@ -18,10 +18,6 @@ def mse(p, y):
     """Mean squared error."""
     return np.mean((p - y)**2)
 
-def mae_nonzeros(p, y):
-    """Mean absolute error calculated only among elements with nonzero true values."""
-    return np.mean(np.abs(p[y > 0] - y[y > 0]))
-
 def min_error(p, y):
     """Error with lowest value (which may be a large negative number)."""
     return np.min(p - y)
@@ -175,13 +171,13 @@ def evaluate(p, y) -> Dict[str, float]:
     results = {
         'Mean Error': me(p, y),
         'MAE': mae(p, y),
+        'MAE (nonzero)': mae(p[y > 0], y[y > 0]),
         # 'MSE': mse(p, y),
-        # 'MAE among nonzeros': mae_nonzeros(p, y),
         'Min error': min_error(p, y),
         'Max error': max_error(p, y),
         # 'Zeros correct': fraction_of_zeros_correct(p, y),
         # 'Zeros incorrect': fraction_of_zeros_incorrect(p, y),
-        'Number of values out of bounds': ((p < 0) + (p > 1)).sum(),
+        # 'Number of values out of bounds': ((p < 0) + (p > 1)).sum(),
         # 'Fraction of values out of bounds': ((p < 0) + (p > 1)).sum() / p.size,
     }
     

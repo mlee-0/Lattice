@@ -190,9 +190,11 @@ def train(
         labels = np.concatenate(labels, axis=0)
         # train_dataloader.dataset.dataset.unnormalize(outputs)
         # train_dataloader.dataset.dataset.unnormalize(labels)
+        outputs /= LatticeDataset.DIAMETER_SCALE
+        labels /= LatticeDataset.DIAMETER_SCALE
         results = metrics.evaluate(outputs, labels)
         for metric, value in results.items():
-            print(f"{metric}: {value:.3f}")
+            print(f"{metric}: {value:,.4f}")
 
         # Save the model parameters periodically and in the last iteration of the loop.
         if epoch % save_model_every == 0 or epoch == epochs[-1]:
@@ -302,13 +304,13 @@ def evaluate(outputs: np.ndarray, labels: np.ndarray, inputs: np.ndarray, datase
 
     results = metrics.evaluate(outputs, labels)
     for metric, value in results.items():
-        print(f"{metric}: {value:,.3f}")
+        print(f"{metric}: {value:,.4f}")
 
     # Initialize values to send to the GUI.
     if queue:
         info_gui["info_metrics"] = results
         queue.put(info_gui)
-    
+
     return results
 
 @torch.no_grad()

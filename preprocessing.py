@@ -27,12 +27,6 @@ INPUT_SHAPE = (11, 11, 11)
 # Size of the volume of space around each node inside which struts are formed with other nodes.
 STRUT_NEIGHBORHOOD = 3
 STRUT_NEIGHBORHOOD_RADIUS = int((STRUT_NEIGHBORHOOD-1) / 2)
-# Unit vectors representing all possible struts extending from a node.
-# DIRECTIONS = [
-#     (1, 0, 0), (0, 1, 0), (0, 0, 1), (-1, 0, 0), (0, -1, 0), (0, 0, -1),
-#     (1, 1, 0), (0, 1, 1), (1, 0, 1), (-1, 1, 0), (1, -1, 0), (-1, -1, 0), (0, -1, 1), (0, 1, -1), (0, -1, -1), (-1, 0, 1), (1, 0, -1), (-1, 0, -1),
-#     (1, 1, 1), (-1, 1, 1), (1, -1, 1), (1, 1, -1), (-1, -1, 1), (1, -1, -1), (-1, 1, -1), (-1, -1, -1),
-# ]
 # Unit vectors representing the unique, non-parallel struts extending from a node.
 DIRECTIONS = [
     (1, 0, 0), (0, 1, 0), (0, 0, 1),
