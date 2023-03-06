@@ -14,10 +14,10 @@ def get_parameter_count(model: Module) -> int:
 def residual(in_channels, out_channels):
     return Sequential(
         Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding='same'),
+        BatchNorm3d(num_features=out_channels),
         ReLU(inplace=False),
         Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding='same'),
     )
-
 
 class ResNet(Module):
     """3D ResNet-based CNN whose input is a 3D array of densities and whose output is a single strut diameter."""
@@ -90,7 +90,6 @@ class ResNetArray(Module):
 
     def __init__(self, output_max: float) -> None:
         super().__init__()
-        self.output_max = output_max
 
         input_channels = 2
         output_channels = 13
@@ -98,59 +97,69 @@ class ResNetArray(Module):
         # Number of output channels in the first layer.
         c = 4
 
-        self.convolution_1 = Sequential(
+        class ClipLayer(Module):
+            """A layer that clips values to 0 and the specified maximum."""
+            def __init__(self) -> None:
+                super().__init__()
+            
+            def forward(self, x):
+                return x * ((x > 0) & (x < output_max))
+
+        self.convolution_initial = Sequential(
             Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
             BatchNorm3d(c*1),
             ReLU(inplace=True),
         )
-        self.convolution_2 = Sequential(
-            Conv3d(in_channels=c*1, out_channels=c*2, kernel_size=3, stride=1, padding='same'),
-            BatchNorm3d(c*2),
-            ReLU(inplace=True),
-        )
-        self.convolution_3 = Sequential(
-            Conv3d(in_channels=c*2, out_channels=c*4, kernel_size=3, stride=1, padding='same'),
-            BatchNorm3d(c*4),
-            ReLU(inplace=True),
-        )
-        self.convolution_4 = Sequential(
-            Conv3d(in_channels=c*4, out_channels=c*8, kernel_size=3, stride=1, padding='same'),
-            BatchNorm3d(c*8),
-            ReLU(inplace=True),
-        )
-        self.convolution_5 = Sequential(
-            Conv3d(in_channels=c*8, out_channels=c*16, kernel_size=3, stride=1, padding='same'),
-            BatchNorm3d(c*16),
-            ReLU(inplace=True),
-        )
 
         self.residual_1 = residual(c*1, c*1)
-        self.residual_2 = residual(c*2, c*2)
-        self.residual_3 = residual(c*4, c*4)
-        self.residual_4 = residual(c*8, c*8)
-        self.residual_5 = residual(c*16, c*16)
+        self.residual_2 = residual(c*1, c*1)
+        self.residual_3 = residual(c*1, c*2)
+        self.residual_4 = residual(c*2, c*2)
+        self.residual_5 = residual(c*2, c*4)
+        self.residual_6 = residual(c*4, c*4)
+        self.residual_7 = residual(c*4, c*8)
+        self.residual_8 = residual(c*8, c*8)
+        # self.residual_9 = residual(c*8, c*16)
+        # self.residual_10 = residual(c*16, c*16)
 
         self.convolution_final = Sequential(
-            Conv3d(in_channels=c*16, out_channels=output_channels, kernel_size=1, stride=1, padding='same'),
+            Conv3d(in_channels=c*8, out_channels=output_channels, kernel_size=1, stride=1, padding='same'),
+            ClipLayer(), # ReLU(inplace=True),
         )
 
     def forward(self, x):
-        batch_size = x.size(0)
+        x = self.convolution_initial(x)
 
-        x = self.convolution_1(x)
         x = torch.relu(x + self.residual_1(x))
-        x = self.convolution_2(x)
         x = torch.relu(x + self.residual_2(x))
-        x = self.convolution_3(x)
-        x = torch.relu(x + self.residual_3(x))
-        x = self.convolution_4(x)
+
+        residual = self.residual_3(x)
+        x = torch.relu(
+            torch.cat((x, torch.zeros(x.size(0), residual.size(1)-x.size(1), *x.size()[2:])), dim=1) + residual
+        )
         x = torch.relu(x + self.residual_4(x))
-        x = self.convolution_5(x)
-        x = torch.relu(x + self.residual_5(x))
+
+        residual = self.residual_5(x)
+        x = torch.relu(
+            torch.cat((x, torch.zeros(x.size(0), residual.size(1)-x.size(1), *x.size()[2:])), dim=1) + residual
+        )
+        x = torch.relu(x + self.residual_6(x))
+
+        residual = self.residual_7(x)
+        x = torch.relu(
+            torch.cat((x, torch.zeros(x.size(0), residual.size(1)-x.size(1), *x.size()[2:])), dim=1) + residual
+        )
+        x = torch.relu(x + self.residual_8(x))
+
+        # residual = self.residual_9(x)
+        # x = torch.relu(
+        #     torch.cat((x, torch.zeros(x.size(0), residual.size(1)-x.size(1), *x.size()[2:])), dim=1) + residual
+        # )
+        # x = torch.relu(x + self.residual_10(x))
 
         x = self.convolution_final(x)
-        # Variant of ReLU in which values are clipped to 0 and the specified maximum.
-        x = torch.clip(x, 0, self.output_max)
+        # # Variant of ReLU in which values are clipped to 0 and the specified maximum.
+        # x = torch.clip(x, 0, self.output_max)
 
         return x
 
