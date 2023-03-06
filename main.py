@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch import nn
-from torch.utils.data import Dataset, Subset, DataLoader
+from torch.utils.data import Dataset, DataLoader, random_split
 # import torch_geometric
 
 from datasets import *
@@ -40,15 +40,10 @@ def plot_loss(figure, epochs: list, loss: List[list], labels: List[str], start_e
     for i, loss_i in enumerate(loss):
         if not len(loss_i):
             continue
-        axis.plot(epochs[:len(loss_i)], loss_i, ".-", label=labels[i])
+        axis.semilogy(epochs[:len(loss_i)], loss_i, ".-", label=labels[i])
         axis.annotate(f"{loss_i[-1]:,.2e}", (epochs[-1 - (len(epochs)-len(loss_i))], loss_i[-1]), fontsize=10)
-    
-    # # Plot a vertical line indicating when the current training session began.
-    # if start_epoch:
-    #     axis.vlines(start_epoch - 0.5, 0, max([max(_) for _ in loss]), colors=(Colors.GRAY,), label="Current session starts")
-    
+
     axis.legend()
-    axis.set_ylim(bottom=0)
     axis.set_xlabel("Epochs")
     axis.set_ylabel("Loss")
     axis.grid(axis="y")
@@ -113,10 +108,10 @@ def train(
         loss = 0
 
         try:
-            for batch, (input_data, label_data, coordinates) in enumerate(train_dataloader, 1):
+            for batch, (input_data, label_data) in enumerate(train_dataloader, 1):
                 input_data = input_data.to(device)
                 label_data = label_data.to(device)
-                output_data = model(input_data, coordinates)
+                output_data = model(input_data)
 
                 # Calculate the loss.
                 loss_current = loss_function(output_data, label_data)
@@ -163,10 +158,10 @@ def train(
         outputs = []
         labels = []
         with torch.no_grad():
-            for batch, (input_data, label_data, coordinates) in enumerate(validate_dataloader, 1):
+            for batch, (input_data, label_data) in enumerate(validate_dataloader, 1):
                 input_data = input_data.to(device)
                 label_data = label_data.to(device)
-                output_data = model(input_data, coordinates)
+                output_data = model(input_data)
                 loss += loss_function(output_data, label_data).item()
 
                 # Convert to NumPy arrays for evaluation metric calculations.
@@ -272,11 +267,11 @@ def test(
     outputs = []
     labels = []
 
-    for batch, (input_data, label_data, coordinates) in enumerate(test_dataloader, 1):
+    for batch, (input_data, label_data) in enumerate(test_dataloader, 1):
         try:
             input_data = input_data.to(device)
             label_data = label_data.to(device)
-            output_data = model(input_data, coordinates)
+            output_data = model(input_data)
             loss += loss_function(output_data, label_data).item()
 
             # Convert to NumPy arrays for evaluation metric calculations.
@@ -339,7 +334,7 @@ def infer(model: nn.Module, filename_model: str, dataset: Dataset, batch_size: i
 
 
 def main(
-    epoch_count: int, learning_rate: float, decay_learning_rate: bool, batch_sizes: Tuple[int, int, int], data_split: Tuple[float, float, float], dataset: Dataset, Model: nn.Module,
+    epoch_count: int, learning_rate: float, decay_learning_rate: bool, batch_sizes: Tuple[int, int, int], data_split: Tuple[float, float, float], dataset: Dataset, model: nn.Module,
     filename_model: str, train_existing: bool, save_model_every: int,
     train_model: bool, test_model: bool, visualize_results: bool,
     Optimizer: torch.optim.Optimizer = torch.optim.SGD, loss_function: nn.Module = nn.MSELoss(),
@@ -358,7 +353,7 @@ def main(
     `data_split`: Tuple of three floats in [0, 1] of the relative training, validation, and testing dataset sizes.
     `dataset`: The Dataset to train on.
     `filename_model`: Name of the .pth file to load and save to during training.
-    `Model`: A Module subclass to instantiate, not an instance of the class.
+    `model`: The network, as an instance of Module.
     `Optimizer`: An Optimizer subclass to instantiate, not an instance of the class.
     `loss_function`: A callable as an instantiated Module subclass.
 
@@ -389,20 +384,23 @@ def main(
     image_indices = list(range(dataset.inputs.size(0)))
     random.shuffle(image_indices)
 
-    train_size, validate_size, test_size = [int(split * dataset.inputs.size(0)) for split in data_split]
-    train_image_indices = image_indices[:train_size]
-    validate_image_indices = image_indices[train_size:train_size+validate_size]
-    test_image_indices = image_indices[-test_size:]
+    train_dataset, validate_dataset, test_dataset = random_split(
+        dataset,
+        lengths=[int(split * len(dataset)) for split in data_split],
+        generator=torch.Generator().manual_seed(42),
+    )
+    # train_size, validate_size, test_size = [int(split * dataset.inputs.size(0)) for split in data_split]
+    # train_image_indices = image_indices[:train_size]
+    # validate_image_indices = image_indices[train_size:train_size+validate_size]
+    # test_image_indices = image_indices[-test_size:]
 
-    train_indices = dataset.outputs_for_images(train_image_indices)
-    validate_indices = dataset.outputs_for_images(validate_image_indices)
-    test_indices = dataset.outputs_for_images(test_image_indices)
+    # train_indices = dataset.outputs_for_images(train_image_indices)
+    # validate_indices = dataset.outputs_for_images(validate_image_indices)
+    # test_indices = dataset.outputs_for_images(test_image_indices)
 
-    train_dataset = Subset(dataset, train_indices)
-    validate_dataset = Subset(dataset, validate_indices)
-    test_dataset = Subset(dataset, test_indices)
-    train_size, validate_size, test_size = len(train_dataset), len(validate_dataset), len(test_dataset)
-    dataset_size = sum([train_size, validate_size, test_size])
+    # train_dataset = Subset(dataset, train_indices)
+    # validate_dataset = Subset(dataset, validate_indices)
+    # test_dataset = Subset(dataset, test_indices)
 
     # dataset_size = len(dataset)
     # train_size, validate_size, test_size = [int(split * dataset_size) for split in data_split]
@@ -412,14 +410,13 @@ def main(
     #     generator=torch.Generator().manual_seed(42),
     # )
 
-    print(f"\nSplit {dataset_size:,} samples into {train_size:,} training / {validate_size:,} validation / {test_size:,} testing.")
+    print(f"\nSplit {len(dataset):,} samples into {len(train_dataset):,} training / {len(validate_dataset):,} validation / {len(test_dataset):,} testing.")
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_sizes[0], shuffle=True, drop_last=False)
     validate_dataloader = DataLoader(validate_dataset, batch_size=batch_sizes[1], shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_sizes[2], shuffle=False)
 
     # Initialize the model and optimizer.
-    model = Model()
     model.to(device)
     print(f"Using model {type(model).__name__} with {get_parameter_count(model):,} parameters.")
     optimizer = Optimizer(model.parameters(), lr=learning_rate)
@@ -472,23 +469,30 @@ def main(
         labels = np.concatenate(labels, axis=0)
         inputs = np.concatenate(inputs, axis=0)
 
+        # Scale predictions and labels [0, 1].
+        outputs /= LatticeDataset.DIAMETER_SCALE
+        labels /= LatticeDataset.DIAMETER_SCALE
+
         results = evaluate(outputs, labels, inputs, dataset, queue=queue, info_gui=info_gui)
 
         if visualize_results:
-            # Calculate (x, y, z) coordinates of each node.
-            locations_1 = []
-            locations_2 = []
-            for i in range(inputs.shape[0]):
-                coordinates = np.argwhere(inputs[i, 1, ...])
-                assert coordinates.shape[0] == 2
-                locations_1.append(tuple(coordinates[0, :]))
-                locations_2.append(tuple(coordinates[1, :]))
+            # # Calculate (x, y, z) coordinates of each node.
+            # locations_1 = []
+            # locations_2 = []
+            # for i in range(inputs.shape[0]):
+            #     coordinates = np.argwhere(inputs[i, 1, ...])
+            #     assert coordinates.shape[0] == 2
+            #     locations_1.append(tuple(coordinates[0, :]))
+            #     locations_2.append(tuple(coordinates[1, :]))
 
-            metrics.plot_histograms(outputs, labels, bins=20)
-            metrics.plot_predicted_vs_true(outputs, labels)
-            metrics.plot_error_by_angle(outputs, labels, locations_1, locations_2)
-            metrics.plot_error_by_edge_distance(outputs, labels, locations_1, locations_2)
-            metrics.plot_error_by_xy_edge_distance(outputs, labels, locations_1, locations_2)
+            # # metrics.plot_histograms(outputs, labels, bins=20)
+            # metrics.plot_predicted_vs_true(outputs, labels)
+            # # metrics.plot_error_by_angle(outputs, labels, locations_1, locations_2)
+            # # metrics.plot_error_by_edge_distance(outputs, labels, locations_1, locations_2)
+            # # metrics.plot_error_by_xy_edge_distance(outputs, labels, locations_1, locations_2)
+
+            for i in range(2):
+                visualize_lattice(*convert_array_to_lattice(outputs[i, ...]))
 
             # # If predicting local strut diameters, visualize the predictions on all struts in a single lattice structure.
             # dataset.p = 1.0
@@ -537,18 +541,18 @@ if __name__ == "__main__":
         "test_model": True,
         "visualize_results": True,
 
-        "train_existing": True,
+        "train_existing": not True,
         "filename_model": "model.pth",
         "save_model_every": 1,
 
         "epoch_count": 5,
-        "learning_rate": 1e-4,
+        "learning_rate": 1e-3,
         "decay_learning_rate": False,
-        "batch_sizes": (64, 64, 64),
+        "batch_sizes": (16, 64, 64),
         "data_split": (0.8, 0.1, 0.1),
         
-        "dataset": StrutDataset(p=1.0, normalize_inputs=True),
-        "Model": ResNetMasked,
+        "dataset": LatticeDataset(normalize_inputs=True),
+        "model": ResNetArray(output_max=LatticeDataset.DIAMETER_SCALE),
         "Optimizer": torch.optim.Adam,
         "loss_function": nn.MSELoss(),
     }

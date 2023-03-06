@@ -85,6 +85,75 @@ class ResNet(Module):
 
         return x
 
+class ResNetArray(Module):
+    """3D ResNet whose input is a 3D array of densities and whose output is an array of diameters throughout the volume."""
+
+    def __init__(self, output_max: float) -> None:
+        super().__init__()
+        self.output_max = output_max
+
+        input_channels = 2
+        output_channels = 13
+
+        # Number of output channels in the first layer.
+        c = 4
+
+        self.convolution_1 = Sequential(
+            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*1),
+            ReLU(inplace=True),
+        )
+        self.convolution_2 = Sequential(
+            Conv3d(in_channels=c*1, out_channels=c*2, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*2),
+            ReLU(inplace=True),
+        )
+        self.convolution_3 = Sequential(
+            Conv3d(in_channels=c*2, out_channels=c*4, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*4),
+            ReLU(inplace=True),
+        )
+        self.convolution_4 = Sequential(
+            Conv3d(in_channels=c*4, out_channels=c*8, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*8),
+            ReLU(inplace=True),
+        )
+        self.convolution_5 = Sequential(
+            Conv3d(in_channels=c*8, out_channels=c*16, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(c*16),
+            ReLU(inplace=True),
+        )
+
+        self.residual_1 = residual(c*1, c*1)
+        self.residual_2 = residual(c*2, c*2)
+        self.residual_3 = residual(c*4, c*4)
+        self.residual_4 = residual(c*8, c*8)
+        self.residual_5 = residual(c*16, c*16)
+
+        self.convolution_final = Sequential(
+            Conv3d(in_channels=c*16, out_channels=output_channels, kernel_size=1, stride=1, padding='same'),
+        )
+
+    def forward(self, x):
+        batch_size = x.size(0)
+
+        x = self.convolution_1(x)
+        x = torch.relu(x + self.residual_1(x))
+        x = self.convolution_2(x)
+        x = torch.relu(x + self.residual_2(x))
+        x = self.convolution_3(x)
+        x = torch.relu(x + self.residual_3(x))
+        x = self.convolution_4(x)
+        x = torch.relu(x + self.residual_4(x))
+        x = self.convolution_5(x)
+        x = torch.relu(x + self.residual_5(x))
+
+        x = self.convolution_final(x)
+        # Variant of ReLU in which values are clipped to 0 and the specified maximum.
+        x = torch.clip(x, 0, self.output_max)
+
+        return x
+
 class ResNetMasked(Module):
     """Variant of ResNet that only sends two locations in the input tensor into the fully-connected layer."""
 

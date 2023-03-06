@@ -27,6 +27,18 @@ INPUT_SHAPE = (11, 11, 11)
 # Size of the volume of space around each node inside which struts are formed with other nodes.
 STRUT_NEIGHBORHOOD = 3
 STRUT_NEIGHBORHOOD_RADIUS = int((STRUT_NEIGHBORHOOD-1) / 2)
+# Unit vectors representing all possible struts extending from a node.
+# DIRECTIONS = [
+#     (1, 0, 0), (0, 1, 0), (0, 0, 1), (-1, 0, 0), (0, -1, 0), (0, 0, -1),
+#     (1, 1, 0), (0, 1, 1), (1, 0, 1), (-1, 1, 0), (1, -1, 0), (-1, -1, 0), (0, -1, 1), (0, 1, -1), (0, -1, -1), (-1, 0, 1), (1, 0, -1), (-1, 0, -1),
+#     (1, 1, 1), (-1, 1, 1), (1, -1, 1), (1, 1, -1), (-1, -1, 1), (1, -1, -1), (-1, 1, -1), (-1, -1, -1),
+# ]
+# Unit vectors representing the unique, non-parallel struts extending from a node.
+DIRECTIONS = [
+    (1, 0, 0), (0, 1, 0), (0, 0, 1),
+    (1, 1, 0), (0, 1, 1), (1, 0, 1), (-1, 1, 0), (0, -1, 1), (-1, 0, 1),
+    (1, 1, 1), (-1, 1, 1), (1, -1, 1), (1, 1, -1),
+]
 
 
 def read_coordinates() -> List[List[int]]:
@@ -186,7 +198,7 @@ def make_struts(length: int, shape: Tuple[int, int, int]) -> List[Tuple[tuple, t
     
     return struts
 
-def apply_mask_inputs(inputs: torch.Tensor, outputs: list):
+def mask_inputs(inputs: torch.Tensor, outputs: list):
     """Replace density values outside the predefined volume of space with some constant value."""
 
     struts = read_struts()
@@ -313,6 +325,30 @@ def convert_outputs_to_struts(outputs: list) -> List[Tuple[int, Tuple[int, int, 
     
     return data
 
+def convert_outputs_to_array(outputs: list) -> torch.Tensor:
+    """Convert the given output data to a 5D tensor of strut diameters with a number of channels equal to the number of unique struts at each node."""
+
+    coordinates = read_coordinates()
+    struts = read_struts()
+
+    array = np.zeros((len(outputs), len(DIRECTIONS), *INPUT_SHAPE))
+
+    for i, output in enumerate(outputs):
+        for strut, diameter in output:
+            node_1, node_2 = struts[strut - 1]
+            (x1, y1, z1), (x2, y2, z2) = coordinates[node_1 - 1], coordinates[node_2 - 1]
+
+            direction_1_2 = (x2 - x1, y2 - y1, z2 - z1)
+            direction_2_1 = (x1 - x2, y1 - y2, z1 - z2)
+            if direction_1_2 in DIRECTIONS:
+                array[i, DIRECTIONS.index(direction_1_2), x1, y1, z1] = diameter
+            elif direction_2_1 in DIRECTIONS:
+                array[i, DIRECTIONS.index(direction_2_1), x2, y2, z2] = diameter
+            else:
+                raise Exception(f"Neither {direction_1_2} nor {direction_2_1} could be found.")
+
+    return torch.tensor(array).float()
+
 # def convert_dataset_to_graph(inputs: torch.Tensor, outputs: list): -> List[torch_geometric.data.Data]:
 #     """Convert a 5D array of input data and a list of output data to a list of graphs."""
 
@@ -416,15 +452,15 @@ def write_pickle(data: Any, path: str) -> None:
 if __name__ == "__main__":
     inputs = read_inputs()
     outputs = read_outputs()
-    inputs = augment_inputs(inputs)
-    outputs = augment_outputs(outputs)
-    outputs = convert_outputs_to_struts(outputs)
-    write_pickle(inputs, 'Training_Data_11/inputs_augmented.pickle')
-    write_pickle(outputs, 'Training_Data_11/outputs_augmented.pickle')
+    # inputs = augment_inputs(inputs)
+    # outputs = augment_outputs(outputs)
+    outputs = convert_outputs_to_array(outputs)
+    write_pickle(inputs, 'Training_Data_11/inputs.pickle')
+    write_pickle(outputs, 'Training_Data_11/outputs_array.pickle')
 
-    # masked_inputs = apply_mask_inputs(inputs, outputs)
+    # masked_inputs = mask_inputs(inputs, outputs)
     # adjacency = convert_outputs_to_adjacency(outputs)
-    # write_pickle(masked_inputs, 'Training_Data_10/inputs.pickle')
+    # write_pickle(masked_inputs, 'Training_Data_10/inputs_masked.pickle')
     # write_pickle(adjacency, 'Training_Data_10/outputs_adjacency.pickle')
     
     # graphs = convert_dataset_to_graph(inputs, outputs)

@@ -14,6 +14,56 @@ from preprocessing import DATASET_FOLDER, read_pickle
 from visualization import *
 
 
+class LatticeDataset(torch.utils.data.Dataset):
+    # Maximum value to scale diameters to.
+    DIAMETER_SCALE = 100
+
+    def __init__(self, normalize_inputs: bool=True) -> None:
+        super().__init__()
+
+        self.inputs = read_pickle(os.path.join(DATASET_FOLDER, 'inputs.pickle')).float()
+        self.outputs = read_pickle(os.path.join(DATASET_FOLDER, 'outputs_array.pickle')).float()
+
+        # Add a second binary channel with values of either -1 or 1 with 1s representing the active nodes.
+        self.inputs = torch.cat(
+            (self.inputs, torch.any(self.outputs > 0, dim=1, keepdim=True) * 2 - 1),
+            dim=1,
+        )
+
+        # Normalize input data.
+        if normalize_inputs:
+            self.input_mean = self.inputs.mean()
+            self.input_std = self.inputs.std()
+
+            self.inputs -= self.input_mean
+            self.inputs /= self.input_std
+        
+        # Scale label data.
+        self.outputs *= self.DIAMETER_SCALE
+
+        # Print a summary of the data.
+        print(f"\nDataset '{type(self)}':")
+        
+        print(f"Input data:")
+        print(f"\tShape: {self.inputs.size()}")
+        print(f"\tData type: {self.inputs.dtype}")
+        print(f"\tMemory: {self.inputs.storage().nbytes()/1e6:,.2f} MB")
+        print(f"\tMin, max: {self.inputs.min()}, {self.inputs.max()}")
+        print(f"\tMean, standard deviation: {self.inputs.mean():.2f}, {self.inputs.std():.2f}")
+
+        print(f"Label data:")
+        print(f"\tShape: {self.outputs.size()}")
+        print(f"\tData type: {self.outputs.dtype}")
+        print(f"\tMemory: {self.outputs.storage().nbytes()/1e6:,.2f} MB")
+        print(f"\tMin, max: {self.outputs.min()}, {self.outputs.max()}")
+        print(f"\tMean, standard deviation: {self.outputs.mean():.2f}, {self.outputs.std():.2f}")
+
+    def __len__(self) -> int:
+        return self.outputs.size(0)
+
+    def __getitem__(self, index):
+        return self.inputs[index, ...], self.outputs[index, ...]
+
 class StrutDataset(torch.utils.data.Dataset):
     """Density and node location data as 2-channel 3D tensors and strut diameter data as scalars. The node location channel is a binary array with values {0, 1}.
     

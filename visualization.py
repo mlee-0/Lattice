@@ -59,6 +59,42 @@ def convert_output_to_lattice(output: list) -> Tuple[list, list, list]:
     
     return coordinates_1, coordinates_2, diameters
 
+def convert_array_to_lattice(array: np.ndarray) -> Tuple[list, list, list]:
+    """Convert a 4D array into a tuple of coordinates and diameters."""
+
+    indices = np.argwhere(array)
+    coordinates = read_coordinates()
+
+    coordinates_1, coordinates_2, diameters = [], [], []
+
+    for channel, x, y, z in indices:
+        dx, dy, dz = DIRECTIONS[channel]
+        # node_1 = coordinates.index([x, y, z]) + 1
+        # try:
+        #     node_2 = coordinates.index([x + dx, y + dy, z + dz]) + 1
+        # # Model predicted an out-of-bounds strut.
+        # except ValueError:
+        #     continue
+
+        coordinates_1.append([x, y, z])
+        coordinates_2.append([x + dx, y + dy, z + dz])
+        diameters.append(array[channel, x, y, z])
+
+        # # Only append struts for which node number 1 is less than node number 2, to prevent having duplicate struts.
+        # if node_1 < node_2:
+        #     # The channel for node 2 that corresponds to this strut.
+        #     channel_2 = DIRECTIONS.index((-dx, -dy, -dz))
+
+        #     coordinates_1.append([x, y, z])
+        #     coordinates_2.append([x + dx, y + dy, z + dz])
+        #     # Calculate the average of the two diameters corresonding to this strut. This is necessary because the array contains duplicate information, with two diameters predicted for each strut.
+        #     diameters.append(np.mean([
+        #         array[channel, x, y, z],
+        #         array[channel_2, x+dx, y+dy, z+dz],
+        #     ]))
+
+    return coordinates_1, coordinates_2, diameters
+
 def convert_adjacency_to_lattice(array: np.ndarray) -> Tuple[list, list, list]:
     """Convert a 2D adjacency matrix into a tuple of coordinates and diameters."""
 
