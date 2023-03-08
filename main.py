@@ -116,7 +116,7 @@ def train(
 
                 # Calculate the loss.
                 loss_current = loss_function(output_data, label_data)
-                loss += loss_current.item()
+                loss += loss_current.item() * label_data.size(0)
 
                 if loss_current is torch.nan:
                     print(f"Stopping due to nan loss.")
@@ -143,7 +143,7 @@ def train(
         except KeyboardInterrupt:
             break
         
-        loss /= batch
+        loss /= len(train_dataloader.dataset)
         training_loss.append(loss)
         print(f"\nTraining loss: {loss:,.2e}")
 
@@ -163,7 +163,7 @@ def train(
                 input_data = input_data.to(device)
                 label_data = label_data.to(device)
                 output_data = model(input_data)
-                loss += loss_function(output_data, label_data).item()
+                loss += loss_function(output_data, label_data).item() * label_data.size(0)
 
                 # Convert to NumPy arrays for evaluation metric calculations.
                 output_data = output_data.cpu().numpy()
@@ -182,7 +182,7 @@ def train(
                 if queue_to_main and not queue_to_main.empty():
                     break
         
-        loss /= batch
+        loss /= len(validate_dataloader.dataset)
         validation_loss.append(loss)
         print(f"\nValidation loss: {loss:,.2e}")
 
@@ -300,7 +300,7 @@ def test(
 
     return outputs, labels, inputs
 
-def evaluate(outputs: np.ndarray, labels: np.ndarray, inputs: np.ndarray, dataset: Dataset, queue=None, info_gui: dict=None):
+def evaluate(outputs: np.ndarray, labels: np.ndarray, queue=None, info_gui: dict=None):
     """Calculate and return evaluation metrics."""
 
     results = metrics.evaluate(outputs, labels)
@@ -476,7 +476,12 @@ def main(
         outputs /= LatticeDataset.DIAMETER_SCALE
         labels /= LatticeDataset.DIAMETER_SCALE
 
-        results = evaluate(outputs, labels, inputs, dataset, queue=queue, info_gui=info_gui)
+        results = metrics.evaluate(outputs, labels)
+        for metric, value in results.items():
+            print(f"{metric}: {value:,.4f}")
+        # # Metrics by channel.
+        # print([metrics.mae(outputs[:, channel, ...], labels[:, channel, ...]) for channel in range(outputs.shape[1])])
+        # print([metrics.mae(outputs[:, channel, ...][labels[:, channel, ...] > 0], labels[:, channel, ...][labels[:, channel, ...] > 0]) for channel in range(outputs.shape[1])])
 
         if visualize_results:
             # # Calculate (x, y, z) coordinates of each node.
