@@ -3,8 +3,7 @@
 
 import os
 import random
-import time
-from typing import List, Tuple, Union
+from typing import *
 
 import numpy as np
 import torch
@@ -21,10 +20,10 @@ class LatticeDataset(torch.utils.data.Dataset):
     def __init__(self, normalize_inputs: bool=True) -> None:
         super().__init__()
 
-        self.inputs = read_pickle(os.path.join(DATASET_FOLDER, 'inputs.pickle')).float()
-        self.outputs = read_pickle(os.path.join(DATASET_FOLDER, 'outputs_array.pickle')).float()
+        self.inputs = read_pickle(os.path.join(DATASET_FOLDER, 'inputs_augmented.pickle')).float()
+        self.outputs = read_pickle(os.path.join(DATASET_FOLDER, 'outputs_array_augmented.pickle')).float()
 
-        # Add a second binary channel with values of either -1 or 1 with 1s representing the active nodes.
+        # Add a second binary channel with values of either -1 (inactive nodes) or 1 (active nodes).
         self.inputs = torch.cat(
             (self.inputs, torch.any(self.outputs > 0, dim=1, keepdim=True) * 2 - 1),
             dim=1,
@@ -468,4 +467,5 @@ class InferenceDataset(torch.utils.data.Dataset):
 
 
 if __name__ == '__main__':
-    dataset = InferenceDataset('circle')
+    # dataset = InferenceDataset('circle')
+    dataset = LatticeDataset(True)

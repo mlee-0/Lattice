@@ -14,11 +14,12 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from datasets import *
 import metrics
 from models import *
-from preprocessing import DATASET_FOLDER
 from visualization import *
 
 
 random.seed(42)
+
+CHECKPOINTS_FOLDER = 'Checkpoints'
 
 
 def plot_loss(figure, epochs: list, loss: List[list], labels: List[str], start_epoch: int = None) -> None:
@@ -317,7 +318,7 @@ def evaluate(outputs: np.ndarray, labels: np.ndarray, inputs: np.ndarray, datase
 def infer(model: nn.Module, filename_model: str, dataset: Dataset, batch_size: int):
     """Make predictions using a trained model on a dataset without corresponding labels. Defined as a generator function to allow visualizing intermediate results one by one."""
 
-    checkpoint = load_model(os.path.join(DATASET_FOLDER, filename_model), 'cpu')
+    checkpoint = load_model(os.path.join(CHECKPOINTS_FOLDER, filename_model), 'cpu')
     model.load_state_dict(checkpoint['model_state_dict'])
     model.train(False)
 
@@ -371,7 +372,7 @@ def main(
         "info_metrics": {},
     } if queue else None
     
-    filepath_model = os.path.join(DATASET_FOLDER, filename_model)
+    filepath_model = os.path.join(CHECKPOINTS_FOLDER, filename_model)
 
     if (test_model and not train_model) or (train_model and train_existing):
         checkpoint = load_model(filepath=filepath_model, device=device)
@@ -488,13 +489,16 @@ def main(
             #     locations_2.append(tuple(coordinates[1, :]))
 
             # # metrics.plot_histograms(outputs, labels, bins=20)
-            # metrics.plot_predicted_vs_true(outputs, labels)
+            # metrics.plot_predicted_vs_true(outputs[labels > 0], labels[labels > 0])
             # # metrics.plot_error_by_angle(outputs, labels, locations_1, locations_2)
             # # metrics.plot_error_by_edge_distance(outputs, labels, locations_1, locations_2)
             # # metrics.plot_error_by_xy_edge_distance(outputs, labels, locations_1, locations_2)
 
             for i in range(2):
+                print('Prediction')
                 visualize_lattice(*convert_array_to_lattice(outputs[i, ...]))
+                print('Label')
+                visualize_lattice(*convert_array_to_lattice(labels[i, ...]))
 
             # # If predicting local strut diameters, visualize the predictions on all struts in a single lattice structure.
             # dataset.p = 1.0
@@ -538,6 +542,37 @@ def main(
 
 
 if __name__ == "__main__":
+    # class WeightedMSE(nn.Module):
+    #     def __init__(self) -> None:
+    #         super().__init__()
+
+    #     def forward(self, output, target):
+    #         weights = (target > 0) + 1
+    #         return torch.mean((output - target) ** 2 * weights)
+
+    # Test on 51x51x51
+    # labels = read_outputs()
+    # labels = convert_outputs_to_array(labels)
+    # inputs = read_pickle('Training_Data_51/inputs.pickle').float()[:1, ...]
+    # inputs /= 255
+    # inputs = torch.cat([inputs, torch.any(labels > 0, dim=1, keepdim=True) * 2 - 1], dim=1)
+    # inputs -= -0.1424
+    # inputs /= 0.7858
+
+    # model = ResNetArray(100)
+    # optimizer = torch.optim.Adam(model.parameters(), 1e-3)
+    # checkpoint = load_model('Training_Data_51/model.pth', 'cpu')
+    # model.load_state_dict(checkpoint["model_state_dict"])
+    # optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    # with torch.no_grad():
+    #     outputs = model(inputs)
+    
+    # outputs = outputs.numpy() / 100
+    # print(outputs.min(), outputs.max(), outputs.mean())
+
+    # visualize_lattice(*convert_array_to_lattice(outputs[0, ...]))
+    # # visualize_lattice(*convert_array_to_lattice(labels[0, ...].numpy()))
+
     kwargs = {
         "train_model": True,
         "test_model": True,
@@ -547,10 +582,10 @@ if __name__ == "__main__":
         "filename_model": "model.pth",
         "save_model_every": 1,
 
-        "epoch_count": 5,
+        "epoch_count": 10,
         "learning_rate": 1e-3,
         "decay_learning_rate": False,
-        "batch_sizes": (16, 64, 64),
+        "batch_sizes": (64, 64, 64),
         "data_split": (0.8, 0.1, 0.1),
         
         "dataset": LatticeDataset(normalize_inputs=True),

@@ -2,7 +2,8 @@
 *.pyc
 *.pth
 *.pickle
+*.mat
 
-Training_Data_10
-Training_Data_11
+Training_Data_*
+Checkpoints
 Screenshots
