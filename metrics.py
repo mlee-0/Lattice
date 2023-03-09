@@ -18,6 +18,10 @@ def mse(p, y):
     """Mean squared error."""
     return np.mean((p - y)**2)
 
+def mre(p, y):
+    """Mean relative error."""
+    return np.mean(np.abs(p - y) / y) * 100
+
 def min_error(p, y):
     """Error with lowest value (which may be a large negative number)."""
     return np.min(p - y)
@@ -45,10 +49,6 @@ def fraction_of_zeros_incorrect(p, y) -> float:
 def plot_predicted_vs_true(p, y):
     """Plot the predictions vs. true values sorted from lowest to highest. Intended to reveal which ranges of values produce inaccurate predictions."""
     p, y = p.flatten(), y.flatten()
-    p, y = np.array(sorted(
-        np.concatenate([p[:, None], y[:, None]], axis=1),
-        key=lambda row: row[1]
-    )).transpose()
 
     plt.figure()
     plt.plot(y, p, '.')
@@ -173,6 +173,7 @@ def evaluate(p, y) -> Dict[str, float]:
         'MAE': mae(p, y),
         'MAE (nonzero)': mae(p[y > 0], y[y > 0]),
         # 'MSE': mse(p, y),
+        'MRE (nonzero)': mre(p[y > 0], y[y > 0]),
         'Min error': min_error(p, y),
         'Max error': max_error(p, y),
         # 'Zeros correct': fraction_of_zeros_correct(p, y),
@@ -182,3 +183,21 @@ def evaluate(p, y) -> Dict[str, float]:
     }
     
     return results
+
+
+if __name__ == '__main__':
+    # Large error in 13th channel of output.
+    # mae = [0.0035, 0.0034, 0.0033, 0.0032, 0.0027, 0.0032, 0.0022, 0.0030, 0.0023, 0.0029, 0.0018, 0.0030, 0.0294]
+    # mae_nonzero = [0.0449, 0.0426, 0.0420, 0.0491, 0.0407, 0.0489, 0.0339, 0.0474, 0.0360, 0.0501, 0.0315, 0.0538, 0.5504]
+    # Fixed.
+    mae = [0.0024543037, 0.0028024123, 0.0025359404, 0.0025793596, 0.0027589872, 0.0025958207, 0.0023535574, 0.001957662, 0.002009013, 0.0028329478, 0.0022655376, 0.002060359, 0.0016395957]
+    mae_nonzero = [0.030800002, 0.033750065, 0.029547635, 0.038491372, 0.039132852, 0.037395414, 0.03506133, 0.02897873, 0.028993262, 0.04718298, 0.03725247, 0.035770904, 0.028654413]
+    plt.figure(figsize=(5, 2.5))
+    plt.plot(range(1, 13+1), mae, '.-', label='All')
+    plt.plot(range(1, 13+1), mae_nonzero, '.-', label='Nonzero')
+    plt.xlabel('Channel')
+    plt.ylabel('MAE')
+    plt.xticks(range(1, 13+1))
+    plt.ylim([0, 0.6])
+    plt.legend()
+    plt.show()
