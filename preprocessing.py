@@ -31,7 +31,7 @@ STRUT_NEIGHBORHOOD_RADIUS = int((STRUT_NEIGHBORHOOD-1) / 2)
 DIRECTIONS = [
     (1, 0, 0), (0, 1, 0), (0, 0, 1),
     (1, 1, 0), (0, 1, 1), (1, 0, 1), (-1, 1, 0), (0, -1, 1), (-1, 0, 1),
-    (1, 1, 1), (-1, 1, 1), (1, -1, 1), (1, 1, -1),
+    (1, 1, 1), (-1, 1, 1), (1, -1, 1), (-1, -1, 1),
 ]
 
 
@@ -446,11 +446,11 @@ def write_pickle(data: Any, path: str) -> None:
 if __name__ == "__main__":
     inputs = read_inputs()
     outputs = read_outputs()
-    # inputs = augment_inputs(inputs)
-    # outputs = augment_outputs(outputs)
+    inputs = augment_inputs(inputs)
+    outputs = augment_outputs(outputs)
     outputs = convert_outputs_to_array(outputs)
-    write_pickle(inputs, 'Training_Data_11/inputs.pickle')
-    write_pickle(outputs, 'Training_Data_11/outputs_array.pickle')
+    write_pickle(inputs, 'Training_Data_11/inputs_augmented.pickle')
+    write_pickle(outputs, 'Training_Data_11/outputs_array_augmented.pickle')
 
     # masked_inputs = mask_inputs(inputs, outputs)
     # adjacency = convert_outputs_to_adjacency(outputs)
