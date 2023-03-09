@@ -90,20 +90,13 @@ class ResNetArray(Module):
 
     def __init__(self, output_max: float) -> None:
         super().__init__()
+        self.output_max = output_max
 
         input_channels = 2
         output_channels = 13
 
         # Number of output channels in the first layer.
         c = 4
-
-        class ClipLayer(Module):
-            """A layer that clips values to 0 and the specified maximum."""
-            def __init__(self) -> None:
-                super().__init__()
-            
-            def forward(self, x):
-                return x * ((x > 0) & (x < output_max))
 
         self.convolution_initial = Sequential(
             Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
@@ -119,12 +112,13 @@ class ResNetArray(Module):
         self.residual_6 = residual(c*4, c*4)
         self.residual_7 = residual(c*4, c*8)
         self.residual_8 = residual(c*8, c*8)
-        # self.residual_9 = residual(c*8, c*16)
-        # self.residual_10 = residual(c*16, c*16)
+        # self.residual_9 = residual(c*8, c*8)
+        # self.residual_10 = residual(c*8, c*8)
+        # self.residual_11 = residual(c*8, c*8)
+        # self.residual_12 = residual(c*8, c*8)
 
         self.convolution_final = Sequential(
             Conv3d(in_channels=c*8, out_channels=output_channels, kernel_size=1, stride=1, padding='same'),
-            ClipLayer(), # ReLU(inplace=True),
         )
 
     def forward(self, x):
@@ -150,16 +144,14 @@ class ResNetArray(Module):
             torch.cat((x, torch.zeros(x.size(0), residual.size(1)-x.size(1), *x.size()[2:])), dim=1) + residual
         )
         x = torch.relu(x + self.residual_8(x))
-
-        # residual = self.residual_9(x)
-        # x = torch.relu(
-        #     torch.cat((x, torch.zeros(x.size(0), residual.size(1)-x.size(1), *x.size()[2:])), dim=1) + residual
-        # )
+        # x = torch.relu(x + self.residual_9(x))
         # x = torch.relu(x + self.residual_10(x))
+        # x = torch.relu(x + self.residual_11(x))
+        # x = torch.relu(x + self.residual_12(x))
 
         x = self.convolution_final(x)
-        # # Variant of ReLU in which values are clipped to 0 and the specified maximum.
-        # x = torch.clip(x, 0, self.output_max)
+        # Variant of ReLU in which values are clipped to 0 and the specified maximum.
+        x = torch.clip(x, 0, self.output_max)
 
         return x
 
