@@ -246,7 +246,7 @@ def export_stl(actor: vtk.vtkActor, filename: str) -> None:
     writer.SetInputData(actor.GetMapper().GetInput())
     writer.Write()
 
-def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float], screenshot_filename: str=None, gui: bool=False) -> None:
+def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float], resolution: int=4, screenshot_filename: str=None, gui: bool=False) -> None:
     """Show an interactive visualization window of a lattice defined as a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters. All lists must be the same length."""
 
     assert len(locations_1) == len(locations_2) == len(diameters)
@@ -278,7 +278,7 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         tube = vtk.vtkTubeFilter()
         tube.SetInputData(line.GetOutput())
         tube.SetRadius(radius)
-        tube.SetNumberOfSides(4)
+        tube.SetNumberOfSides(resolution)
 
         data.AddInputConnection(tube.GetOutputPort())
     
@@ -292,7 +292,15 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
     actor.SetMapper(mapper)
     # actor.GetProperty().SetLighting(False)
     ren.AddActor(actor)
-    
+
+    # Add the axes actor.
+    axes = vtk.vtkAxesActor()
+    widget = vtk.vtkOrientationMarkerWidget()
+    widget.SetOrientationMarker(axes)
+    widget.SetInteractor(iren)
+    widget.SetEnabled(1)
+    widget.InteractiveOn()
+
     if gui:
         ren.ResetCamera()
         window.Render()
