@@ -6,103 +6,88 @@ Functions for generating figures and visualizations.
 import matplotlib.pyplot as plt
 import vtk
 
-from preprocessing import DIRECTIONS, read_pickle
+from preprocessing import DIRECTIONS, read_pickle, cube_rotations
 from visualization import *
 
 
-def visualize_input():
-    """Show a relative density."""
-    return
+def visualize_density():
+    """Show a relative density matrix."""
 
-def visualize_output():
-    """Show a lattice structure."""
+    data = read_pickle('Training_Data_11/inputs_augmented.pickle').numpy()
+    visualize_input(data[0, 0, ...] * 255, hide_zeros=False)
+
+def visualize_design_region():
+    """Show a design region matrix."""
 
     data = read_pickle('Training_Data_11/outputs_array_augmented.pickle').numpy()
-    data = data[0, ...]
-    locations_1, locations_2, diameters = convert_array_to_lattice(data)
-    visualize_lattice(
-        locations_1=locations_1,
-        locations_2=locations_2,
-        diameters=diameters,
-        resolution=10,
-        gui=True,
-    )   
+    visualize_input((data[0, 0, ...] > 0) * 255, use_lighting=True, hide_zeros=True)
 
-def visualize_unit_cell():
-    """Show the 26 struts extending from each node."""
-
-    visualize_lattice(
-        locations_1=[(0, 0, 0)]*26,
-        locations_2=[(sign*x, sign*y, sign*z) for x, y, z in DIRECTIONS for sign in (-1, +1)],
-        diameters=[0.25]*26,
-        resolution=50,
-        gui=True,
-    )
-
-def visualize_triangulation():
-    """Show a triangulated surface that represents the design region."""
+def visualize_design_region_triangulation():
+    """Show a design region as a triangulated surface."""
 
     coordinates = [
-        [3.66753731481025,3.62644946029142,3.18828934024609],
-        [6.45149740496001,6.66755825103741,9.91782470686778],
-        [6.17067153172898,3.48291992155492,7.54406706214415],
-        [3.37686690207595,1.23768953391515,3.25558115809498],
-        [1.65547562278605,4.6642818819757,3.78191796177453],
-        [9.44976283183825,0.400684963818208,5.68418743629346],
-        [5.09960784755966,5.46721674392765,7.32355966885137],
-        [9.53713444243099,9.62809058968873,4.09950908282565],
-        [4.69904386311318,1.8459272251404,6.13652364049321],
-        [9.32901147267347,0.420230229477961,9.72009007945684],
-        [7.91717329677493,4.45642015571468,8.56158915809978],
-        [4.94275965284496,3.9574147775316,3.84891746645172],
-        [0.136719462301893,9.70176244719239,2.73125572174325],
-        [2.40215066301545,6.69351094762089,8.34462237869957],
-        [4.3788102232242,7.30173335721901,4.92245305798411],
-        [8.87978273197626,1.09654346097627,4.70744846029491],
-        [9.13219356930077,4.9496659304712,1.45237615021405],
-        [6.23656185378252,9.25428005541289,1.00290112106909],
-        [4.69212616416648,6.7213719895248,3.02960357257309],
-        [8.24150540766324,4.23362401061368,9.83454320262463],
+        [5.18751889795213,3.15247116832202,0.214900082320982],
+        [4.16822862672221,1.54186308339116,0.117568878880779],
+        [1.08547556984511,3.88423229604318,3.98796665192688],
+        [6.31427675090401,3.05439848198947,2.09695674834458],
+        [1.26733568056866,8.2117581307302,5.87914740177718],
+        [5.80643663513365,2.79882346584207,8.22721895086327],
+        [1.84500375545941,8.51453947760294,7.49075982358463],
+        [4.94911090203233,1.95285155964464,9.29144914732334],
+        [3.35440618316172,3.55002466794182,5.24545534321685],
+        [2.068487698259,3.45975581098889,5.38645416634196],
+        [1.05165521104586,5.85631351305979,6.67294499380659],
+        [1.53632517968856,4.56250795406776,8.71261196741571],
+        [8.73329549947576,0.384487116383723,1.81324929181593],
+        [7.24371498334733,3.80015594346897,6.99106624590959],
+        [0.0358417601612571,5.46487045006288,1.88910203261924],
+        [8.10415238012061,0.682580666253524,1.99816212424685],
+        [2.45622407967823,2.13226465005379,7.70965949106791],
+        [8.85936548815393,7.71897567107188,5.29896188205266],
+        [8.39280649475202,6.30379369335341,0.0471463719527176],
+        [3.55567385189081,8.08721360720695,9.55361050072058],
     ]
     triangulation = [
-        [12,15,7],
-        [4,9,5],
-        [4,5,1],
-        [3,7,9],
-        [12,7,3],
-        [1,12,4],
-        [19,15,12],
-        [14,5,7],
-        [15,14,7],
-        [15,5,14],
-        [7,5,9],
-        [1,19,12],
-        [1,5,19],
-        [13,5,15],
-        [19,13,15],
-        [19,5,13],
-        [12,3,16],
-        [2,7,3],
-        [11,3,7],
-        [11,7,2],
-        [4,16,9],
-        [12,16,4],
-        [18,15,8],
-        [19,8,15],
-        [19,15,18],
-        [18,8,17],
-        [19,17,8],
-        [19,18,17],
-        [10,20,3],
-        [10,11,20],
-        [2,3,20],
-        [11,2,20],
-        [16,3,11],
-        [16,11,6],
-        [6,11,10],
-        [10,3,9],
-        [6,10,9],
-        [16,6,9],
+        [17,12,10],
+        [9,17,10],
+        [16,19,4],
+        [1,4,19],
+        [4,14,6],
+        [9,4,6],
+        [9,6,17],
+        [7,9,5],
+        [11,7,5],
+        [11,10,12],
+        [3,10,11],
+        [7,12,20],
+        [11,12,7],
+        [9,7,20],
+        [3,5,9],
+        [11,5,15],
+        [3,15,5],
+        [3,11,15],
+        [8,12,17],
+        [6,8,17],
+        [18,14,4],
+        [9,18,4],
+        [9,14,18],
+        [3,2,10],
+        [9,10,2],
+        [2,16,4],
+        [1,16,2],
+        [20,12,8],
+        [6,20,8],
+        [9,1,3],
+        [20,6,14],
+        [9,20,14],
+        [15,1,2],
+        [3,15,2],
+        [3,1,15],
+        [9,2,4],
+        [9,4,1],
+        [13,19,16],
+        [1,13,16],
+        [1,19,13],
     ]
 
     datas = vtk.vtkAppendPolyData()
@@ -130,9 +115,54 @@ def visualize_triangulation():
 
     actor = vtk.vtkActor()
     actor.SetMapper(mapper)
+    actor.GetProperty().SetLighting(True)
 
     visualize_actor_gui(actor)
 
+def visualize_output():
+    """Show a lattice structure."""
+
+    data = read_pickle('Training_Data_11/outputs_array_augmented.pickle').numpy()
+    data = data[0, ...]
+    locations_1, locations_2, diameters = convert_array_to_lattice(data)
+    visualize_lattice(
+        locations_1=locations_1,
+        locations_2=locations_2,
+        diameters=diameters,
+        resolution=10,
+        gui=True,
+    )   
+
+def visualize_unit_cell():
+    """Show the 26 struts extending from each node."""
+
+    visualize_lattice(
+        locations_1=[(0, 0, 0)]*26,
+        locations_2=[(sign*x, sign*y, sign*z) for x, y, z in DIRECTIONS for sign in (-1, +1)],
+        diameters=[0.25]*26,
+        resolution=50,
+        gui=True,
+    )
+
+def visualize_data_augmentation():
+    """Show a relative density matrix rotated 24 ways."""
+
+    data = read_pickle('Training_Data_11/inputs_augmented.pickle').numpy()
+
+    rotations, _ = cube_rotations()
+
+    figure = plt.figure(figsize=(5, 5))
+    for i, index in enumerate(range(0, len(data), 1000)):
+        axis = figure.add_subplot(6, 4, i+1, projection='3d')
+        axis.voxels(data[index, 0, ...] * 255, facecolors=np.repeat(data[index, 0, ..., None], 3, axis=-1))
+        axis.axis(False)
+        axis.set_xticks([])
+        axis.set_yticks([])
+        axis.set_zticks([])
+        axis.set_title(f'{tuple(_*90 for _ in rotations[i])}')
+    
+    plt.subplots_adjust(bottom=0.1, top=0.9)
+    plt.show()
 
 if __name__ == '__main__':
-    visualize_output()
+    visualize_data_augmentation()
