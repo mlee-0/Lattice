@@ -255,6 +255,7 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         application = QApplication(sys.argv)
         gui = InferenceWindow()
         ren = gui.ren
+        iren = gui.iren
         window = gui.renwin
     else:
         ren = vtk.vtkRenderer()
@@ -328,10 +329,24 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         writer.SetInputConnection(filter.GetOutputPort())
         writer.Write()
 
+def visualize_actor_gui(actor):
+    """Show an interactive visualization window of an actor."""
+
+    application = QApplication(sys.argv)
+    gui = InferenceWindow()
+    ren = gui.ren
+    window = gui.renwin
+
+    ren.AddActor(actor)
+    ren.ResetCamera()
+    window.Render()
+    gui.show()
+    sys.exit(application.exec_())
+
 
 if __name__ == "__main__":
-    # # inputs = read_pickle('Training_Data_11/inputs.pickle')
-    # # visualize_input(inputs[0, 0, ...], opacity=1, length=1.0, use_lighting=not True)
+    # inputs = read_pickle('Training_Data_11/inputs.pickle')
+    # visualize_input(inputs[0, 0, ...]*255, opacity=1, length=1.0, use_lighting=not True)
 
     # # input_ = read_mat('Training_Data_11/Input_Data/Density_1', 'Density') * 255
     # # plt.figure()
