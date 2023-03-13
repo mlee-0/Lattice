@@ -315,8 +315,19 @@ def evaluate(outputs: np.ndarray, labels: np.ndarray, queue=None, info_gui: dict
     return results
 
 @torch.no_grad()
-def infer(model: nn.Module, filename_model: str, dataset: Dataset, batch_size: int):
-    """Make predictions using a trained model on a dataset without corresponding labels. Defined as a generator function to allow visualizing intermediate results one by one."""
+def infer_lattice(model: nn.Module, filename_model: str, dataset: Dataset) -> torch.Tensor:
+    """Make predictions using a trained model on a dataset without labels."""
+
+    checkpoint = load_model(os.path.join(CHECKPOINTS_FOLDER, filename_model), 'cpu')
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model.train(False)
+    output = model(dataset[0:1])
+
+    return output
+
+@torch.no_grad()
+def infer_strut(model: nn.Module, filename_model: str, dataset: Dataset, batch_size: int) -> Tuple[list, list, torch.Tensor]:
+    """Make predictions using a trained model on a dataset without labels. Defined as a generator function to allow visualizing intermediate results one by one."""
 
     checkpoint = load_model(os.path.join(CHECKPOINTS_FOLDER, filename_model), 'cpu')
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -334,7 +345,6 @@ def infer(model: nn.Module, filename_model: str, dataset: Dataset, batch_size: i
         diameter = model(input_)
         diameters[(i-1)*batch_size:i*batch_size] = diameter.squeeze()
         yield locations_1, locations_2, diameters
-
 
 def main(
     epoch_count: int, learning_rate: float, decay_learning_rate: bool, batch_sizes: Tuple[int, int, int], data_split: Tuple[float, float, float], dataset: Dataset, model: nn.Module,

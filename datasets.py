@@ -9,6 +9,7 @@ import numpy as np
 import torch
 # import torch_geometric
 
+from inference import *
 from preprocessing import DATASET_FOLDER, read_pickle
 from visualization import *
 
@@ -256,8 +257,68 @@ class StrutDataset(torch.utils.data.Dataset):
 #         # Return the entire graph. Returning individual attributes (x, edge_index, y) results in incorrect batching.
 #         return self.dataset[index]
 
-class InferenceDataset(torch.utils.data.Dataset):
-    """A dataset for testing the iterative lattice generation process. The strut being predicted is fixed at the center of the density matrix."""
+class LatticeInferenceDataset(torch.utils.data.Dataset):
+    """A dataset for testing the network on custom-generated density."""
+
+    density_functions = {
+        'linear': generate_linear_density,
+        'sin': generate_sinusoidal_density,
+        'exp': generate_exponential_density,
+        'random': generate_random_density,
+        'stress': load_stress_density,
+        'top. opt.': load_topology_optimization_density,
+    }
+
+    def __init__(self, density_shape: Tuple[int, int, int], density_function: str, lattice_shape: Tuple[int, int, int], *args) -> None:
+        super().__init__()
+
+        assert all(density_size >= lattice_size for density_size, lattice_size in zip(density_shape, lattice_shape)), f"The density size {density_shape} must be at least as large as the lattice size {lattice_shape} in all dimensions."
+
+        # Minimum and maximum value of density.
+        density_range = [0.0, 1.0]
+        # Generate the density matrix.
+        density_function = self.density_functions[density_function]
+        density = density_function(*density_range, *density_shape)
+
+        # Generate the design region.
+        x, y, z = np.meshgrid(
+            np.arange(lattice_shape[0]) + (density_shape[0] - lattice_shape[0]) // 2,
+            np.arange(lattice_shape[1]) + (density_shape[1] - lattice_shape[1]) // 2,
+            np.arange(lattice_shape[2]) + (density_shape[2] - lattice_shape[2]) // 2,
+        )
+        design_region = -1 * np.ones(density.shape)
+        design_region[x.flatten(), y.flatten(), z.flatten()] = 1
+
+        # Create the input tensor and normalize it.
+        self.inputs = np.concatenate([density[None, None, ...], design_region[None, None, ...]], axis=1)
+        self.inputs = torch.tensor(self.inputs, dtype=torch.float32)
+        self.inputs -= -0.14252009987831116
+        self.inputs /= 0.7857609987258911
+    
+    def __len__(self) -> int:
+        return self.inputs.size(0)
+
+    def __getitem__(self, index):
+        return self.inputs[index, ...]
+
+
+class StrutInferenceDataset(torch.utils.data.Dataset):
+    """A dataset for testing the network on custom-generated density. The strut being predicted is fixed at the center of the density matrix."""
+
+    density_functions = {
+        'linear': generate_linear_density,
+        'sin': generate_sinusoidal_density,
+        'exp': generate_exponential_density,
+        'random': generate_random_density,
+        'stress': load_stress_density,
+        'top. opt.': load_topology_optimization_density,
+    }
+
+    lattice_functions = {
+        'rectangle': generate_rectangular_lattice,
+        'circle': generate_circular_lattice,
+        'random': generate_random_lattice,
+    }
 
     def __init__(self, density_shape: Tuple[int, int, int], density_function: str, lattice_shape: Tuple[int, int, int], lattice_type: str) -> None:
         super().__init__()
@@ -267,185 +328,20 @@ class InferenceDataset(torch.utils.data.Dataset):
         # Start and end values of density matrix.
         density_range = [0.0, 1.0]
 
-        # Generate a density matrix with the specified type.
-        if density_function == 'linear':
-            self.density = np.ones((h, w, d))
-            self.density *= np.concatenate([
-                # np.zeros(d//8),
-                np.linspace(density_range[0], density_range[1], d),
-                # np.ones(d//8),
-            ]) * 255
-        
-        elif density_function == 'sin':
-            self.density = np.ones((h, w, d))
-            self.density *= (np.sin(np.linspace(0, 2*np.pi, d)) * ((density_range[1]-density_range[0]) / 2) + 0.5) * 255
-        
-        elif density_function == 'cos':
-            self.density = np.ones((h, w, d))
-            self.density *= (np.cos(np.linspace(0, 2*np.pi, d)) * ((density_range[1]-density_range[0]) / 2) + 0.5) * 255
-        
-        elif density_function == 'exp':
-            self.density = np.ones((h, w, d))
-            self.density *= np.exp(np.linspace(density_range[0], density_range[1], d))
-            self.density -= self.density.min()
-            self.density /= self.density.max()
-            self.density *= (density_range[1] - density_range[0])
-            self.density += density_range[0]
-            self.density *= 255
-        
-        elif density_function == 'random':
-            from scipy.ndimage import gaussian_filter
-
-            # np.random.seed(42)
-            self.density = np.random.rand(h, w, d)
-            self.density = gaussian_filter(self.density, sigma=3)
-            self.density -= self.density.min()
-            self.density /= self.density.max()
-            self.density *= (density_range[1] - density_range[0])
-            self.density += density_range[0]
-            self.density *= 255
-        
-        elif density_function == 'stress':
-            self.density = read_pickle(os.path.join(DATASET_FOLDER, 'stress.pickle'))
-            self.density -= self.density.min()
-            self.density /= self.density.max()
-            self.density *= 255
-
-            self.density = np.pad(self.density, (6, 6), mode='maximum')
-            density_shape = self.density.shape
-
-            # from main import load_model
-            # from models import Nie
-
-            # density_shape = (15, 30, 15)
-
-            # h, w, d = 20, 40, 30
-            # input_data = np.zeros((1, 4, 20, 40))
-            # input_data[:, 0, :h, :w] = 255
-            # input_data[:, 1, :h, :d] = 255
-            # input_data[:, 2, :h//2, w//2] = 255
-            # input_data[:, 3, h//2, w//2:] = 255
-            # # plt.figure()
-            # # plt.subplot(2, 2, 1); plt.imshow(input_data[0, 0, ...])
-            # # plt.subplot(2, 2, 2); plt.imshow(input_data[0, 1, ...])
-            # # plt.subplot(2, 2, 3); plt.imshow(input_data[0, 2, ...])
-            # # plt.subplot(2, 2, 4); plt.imshow(input_data[0, 3, ...])
-            # # plt.show()
-            # input_data = torch.tensor(input_data).float()
-            # # Normalize based on the mean and standard deviation of the original dataset.
-            # input_data -= 42.1984
-            # input_data /= 94.2048
-
-            # checkpoint = load_model(os.path.join(DATASET_FOLDER, 'stress_model.pth'), 'cpu')
-            # stress_model = Nie(4, (20, 40), 15)
-            # stress_model.load_state_dict(checkpoint['model_state_dict'])
-            # stress_model.train(False)
-            # with torch.no_grad():
-            #     self.density = stress_model(input_data)
-            #     self.density **= 1 / (1/1.8)
-            #     # Scale to (_, 1) to exaggerate the contrast.
-            #     self.density /= self.density.max()
-            #     self.density *= 255
-            # self.density = self.density[0, ...].numpy().transpose((1, 2, 0))
-        
-        elif density_function == 'topology opt.':
-            self.density = read_pickle(os.path.join(DATASET_FOLDER, 'topology_optimization.pickle'))
-            self.density -= self.density.min()
-            self.density /= self.density.max()
-            self.density *= 255
-
-            self.density = np.pad(self.density, (20, 20), mode='edge')
-
-        # visualize_input(self.density, opacity=1.0)
-
+        # Generate a density matrix.
+        density_function = self.density_functions[density_function]
+        self.density = density_function(*density_range, *density_shape)
         # Normalize density values.
         self.density -= 127.4493
         self.density /= 41.9801
         self.density = torch.tensor(self.density)
 
+        # visualize_input(self.density.numpy(), opacity=1.0)
+
         # Generate a lattice structure within the volume, as a list containing pairs of node coordinates.
-        self.indices = []
-
-        if lattice_type == 'rectangle':
-            # List of struts to add at each node.
-            struts = ((1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (0, 1, 1), (1, 0, 1), (1, 1, 1))
-            X, Y, Z = [np.arange(size) + (density_size - size) // 2 for density_size, size in zip(density_shape, lattice_shape)]
-
-            for x in X:
-                for y in Y:
-                    for z in Z:
-                        for dx, dy, dz in struts:
-                            # Prevent adding invalid struts at the edges that are not connected on one end.
-                            if x == X[-1] and dx > 0 or y == Y[-1] and dy > 0 or z == Z[-1] and dz > 0:
-                                continue
-
-                            self.indices.append((
-                                (x, y, z),  # Node 1 for current strut
-                                (x+dx, y+dy, z+dz),  # Node 2 for current strut
-                            ))
+        lattice_function = self.lattice_functions[lattice_type]
+        self.indices = lattice_function(tuple(self.density.size()), lattice_shape)
         
-        elif lattice_type == 'circle':
-            radius = max(lattice_shape[:2]) // 2
-            theta = np.linspace(0, 360, 500) * (np.pi / 180)
-            X = np.round(radius * np.cos(theta)).astype(int)
-            Y = np.round(radius * np.sin(theta)).astype(int)
-            # Delete horizontal/vertical struts that should instead be diagonal struts, to make the overall appearance more curved by introducing diagonal struts.
-            outside_radius = np.sqrt(X ** 2 + Y ** 2) > radius
-            X = X[outside_radius]
-            Y = Y[outside_radius]
-            # https://stackoverflow.com/questions/15637336/numpy-unique-with-order-preserved
-            XY, index = np.unique(np.array([X, Y]), axis=1, return_index=True)
-            XY = XY[:, np.argsort(index)]
-            # Ensure the last node connects to the first.
-            XY = np.append(XY, XY[:, :1], axis=1)
-            # Center the X and Y coordinates within the range instead of at the origin.
-            XY[0, :] += (h//2)
-            XY[1, :] += (w//2)
-
-            Z = np.arange(lattice_shape[2]) + (density_shape[2] - lattice_shape[2]) // 2
-
-            for z in Z:
-                for i in range(XY.shape[1] - 1):
-                    x1, y1 = XY[:, i]
-                    x2, y2 = XY[:, i+1]
-                    self.indices.append((
-                        (x1, y1, z),
-                        (x2, y2, z),
-                    ))
-
-                    if z != Z[-1]:
-                        self.indices.append((
-                            (x1, y1, z),
-                            (x1, y1, z+1),
-                        ))
-                
-                # Add horizontal/vertical struts inside the circle.
-                for x in range(h):
-                    for y in range(w):
-                        if np.sqrt((x-h/2) ** 2 + (y-w/2) ** 2) <= radius:
-                            node_1 = (x, y, z)
-                            for node_2 in [(x+1, y, z), (x-1, y, z), (x, y+1, z), (x, y-1, z)]:
-                                if np.sqrt((node_2[0]-h/2) ** 2 + (node_2[1]-w/2) ** 2) <= radius:
-                                    if (node_1, node_2) not in self.indices and (node_2, node_1) not in self.indices:
-                                        self.indices.append((node_1, node_2))
-        
-        elif lattice_type == 'random':
-            min_coordinates = [(size - lattice_size) // 2 for size, lattice_size in zip([h,w,d], lattice_shape)]
-            max_coordinates = [minimum + lattice_size - 1 for minimum, lattice_size in zip(min_coordinates, lattice_shape)]
-
-            node_current = (h // 2, w // 2, d // 2)
-            while random.random() > 1e-4:
-                node_new = [coordinate + offset for coordinate, offset in zip(node_current, random.choices([-1, 0, 1], k=3))]
-                # Check that the new node is not out of bounds.
-                if all(min_ <= coordinate <= max_ for coordinate, min_, max_ in zip(node_new, min_coordinates, max_coordinates)):
-                    # Check if the new strut is a duplicate.
-                    if (node_current, node_new) not in self.indices and (node_new, node_current) not in self.indices:
-                        self.indices.append((node_current, node_new))
-                        node_current = node_new
-        
-        else:
-            raise NotImplementedError()
-
         # Initialize the second channel, which contains the locations of the two nodes that form a strut.
         self.channel_2 = torch.zeros((11, 11, 11))
 

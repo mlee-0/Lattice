@@ -352,7 +352,7 @@ class InferenceWindow(QMainWindow):
         main_layout.setAlignment(Qt.AlignTop)
 
         self.button_generate = QPushButton('Generate')
-        self.button_generate.clicked.connect(self.generate)
+        self.button_generate.clicked.connect(self.generate_lattice)
         self.button_clear = QPushButton('Clear')
         self.button_clear.clicked.connect(self.clear)
         self.button_export = QPushButton('Export')
@@ -391,7 +391,7 @@ class InferenceWindow(QMainWindow):
         layout.addRow('Density size', layout_)
 
         self.field_density_function = QComboBox()
-        self.field_density_function.addItems(['linear', 'sin', 'cos', 'exp', 'random', 'stress', 'topology opt.'])
+        self.field_density_function.addItems(['linear', 'sin', 'exp', 'random', 'stress', 'top. opt.'])
         layout.addRow('Density function', self.field_density_function)
 
         self.field_lattice_height = QSpinBox()
@@ -453,6 +453,10 @@ class InferenceWindow(QMainWindow):
         button_reset.clicked.connect(self.reset)
         layout.addRow(button_reset)
 
+        button_screenshot = QPushButton('Screenshot')
+        button_screenshot.clicked.connect(self.save_screenshot)
+        layout.addRow(button_screenshot)
+
         return sidebar
     
     def _visualizer(self) -> QWidget:
@@ -467,9 +471,11 @@ class InferenceWindow(QMainWindow):
         return widget
 
     def save_screenshot(self):
+        scale = 2
+
         filter = vtk.vtkWindowToImageFilter()
         filter.SetInput(self.renwin)
-        # filter.SetScale(1)
+        filter.SetScale(scale)
         filter.SetInputBufferTypeToRGB()
         filter.Update()
 
@@ -478,12 +484,44 @@ class InferenceWindow(QMainWindow):
         writer.SetInputConnection(filter.GetOutputPort())
         writer.Write()
 
-    def generate(self) -> None:
+    def generate_lattice(self) -> None:
+        self.dataset = LatticeInferenceDataset(
+            density_shape=(
+                self.field_density_height.value(),
+                self.field_density_width.value(),
+                self.field_density_depth.value(),
+            ),
+            density_function=self.field_density_function.currentText(),
+            lattice_shape=(
+                self.field_lattice_height.value(),
+                self.field_lattice_width.value(),
+                self.field_lattice_depth.value(),
+            ),
+        )
+
+        tic = time.time()
+        output = main.infer_lattice(
+            model=LatticeNet(100),
+            filename_model=self.field_model.text(),
+            dataset=self.dataset,
+        ).numpy()
+        output /= 100
+        toc = time.time()
+        self.label_runtime.setText(f"Generated {np.sum(output > 0)} struts in {toc - tic:.2f} s")
+
+        locations_1, locations_2, diameters = convert_array_to_lattice(output[0, ...])
+        actor = make_actor_lattice(locations_1, locations_2, diameters, resolution=3)
+        self.set_actor(actor)
+        self.reset()
+        
+        self.iren.Render()
+
+    def generate_strut(self) -> None:
         """Generate and show one batch of data."""
 
         # Load the dataset.
         if self.dataset is None:
-            self.dataset = InferenceDataset(
+            self.dataset = StrutInferenceDataset(
                 density_shape=(
                     self.field_density_height.value(),
                     self.field_density_width.value(),
@@ -498,8 +536,8 @@ class InferenceWindow(QMainWindow):
                 lattice_type=self.field_lattice_type.currentText(),
             )
 
-            self.generator = main.infer(
-                model=ResNet(),
+            self.generator = main.infer_strut(
+                model=StrutNet(),
                 filename_model=self.field_model.text(),
                 dataset=self.dataset,
                 batch_size=self.field_batch_size.value(),
@@ -510,11 +548,25 @@ class InferenceWindow(QMainWindow):
             tic = time.time()
             locations_1, locations_2, diameters = next(self.generator)
             toc = time.time()
+
+            # Scale to exaggerate contrast.
+            diameters = torch.tensor(diameters)
+            print(diameters.min(), diameters.max())
+            diameters -= diameters.min()
+            print(diameters.min(), diameters.max())
+            diameters /= diameters.max()
+            print(diameters.min(), diameters.max())
+            diameters = diameters * 0.1 + 0.2  # [0.2, 0.3]
+            print(diameters.min(), diameters.max())
+            # Offset to align with origin.
+            for c1, c2, d in zip(locations_1, locations_2, diameters):
+                print(np.array(c1) - [13, 20, 13], np.array(c2) - [13, 20, 13], round(d.item(), 3))
+
         except StopIteration:
             self.button_generate.setEnabled(False)
         else:
             self.batch += 1
-            actor = make_actor_lattice(locations_1, locations_2, diameters, resolution=10)
+            actor = make_actor_lattice(locations_1, locations_2, diameters, resolution=20)
             self.set_actor(actor)
 
             if self.batch == 0:
