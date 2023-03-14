@@ -14,13 +14,15 @@ def visualize_density():
     """Show a relative density matrix."""
 
     data = read_pickle('Training_Data_11/inputs_augmented.pickle').numpy()
-    visualize_input(data[0, 0, ...] * 255, hide_zeros=False)
+    actor = make_actor_density(data[0, 0, ...] * 255, hide_zeros=False)
+    visualize_actors(actor, gui=True)
 
 def visualize_design_region():
     """Show a design region matrix."""
 
     data = read_pickle('Training_Data_11/outputs_array_augmented.pickle').numpy()
-    visualize_input((data[0, 0, ...] > 0) * 255, use_lighting=True, hide_zeros=True)
+    actor = make_actor_density((data[0, 0, ...] > 0) * 255, use_lighting=True, hide_zeros=True)
+    visualize_actors(actor, gui=True)
 
 def visualize_design_region_triangulation():
     """Show a design region as a triangulated surface."""
@@ -117,34 +119,28 @@ def visualize_design_region_triangulation():
     actor.SetMapper(mapper)
     actor.GetProperty().SetLighting(True)
 
-    visualize_actor_gui(actor)
+    visualize_actors(actor, gui=True)
 
 def visualize_output():
     """Show a lattice structure."""
 
     data = read_pickle('Training_Data_11/outputs_array_augmented.pickle').numpy()
     data = data[0, ...]
-    locations_1, locations_2, diameters = convert_array_to_lattice(data)
-    visualize_lattice(
-        locations_1=locations_1,
-        locations_2=locations_2,
-        diameters=diameters,
-        resolution=10,
-        gui=True,
-    )   
+    actor = make_actor_lattice(*convert_array_to_lattice(data), resolution=100)
+    visualize_actors(actor, gui=True)
 
 def visualize_unit_cell():
     """Show the 26 struts extending from each node."""
 
-    visualize_lattice(
+    actor = make_actor_lattice(
         locations_1=[(0, 0, 0)]*26,
         locations_2=[(sign*x, sign*y, sign*z) for x, y, z in DIRECTIONS for sign in (-1, +1)],
         diameters=[0.25]*26,
-        resolution=50,
-        gui=True,
+        resolution=100,
     )
+    visualize_actors(actor, gui=True)
 
-def visualize_data_augmentation():
+def plot_data_augmentation():
     """Show a relative density matrix rotated 24 ways."""
 
     data = read_pickle('Training_Data_11/inputs_augmented.pickle').numpy()
@@ -165,4 +161,4 @@ def visualize_data_augmentation():
     plt.show()
 
 if __name__ == '__main__':
-    visualize_data_augmentation()
+    visualize_unit_cell()

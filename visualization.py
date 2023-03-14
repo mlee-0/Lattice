@@ -27,22 +27,6 @@ def plot_nodes(array: np.ndarray, opacity: float=1.0) -> None:
     # ax.set(xlim=axis_limits, ylim=axis_limits, zlim=axis_limits)
     plt.show()
 
-def visualize_input(array: np.ndarray, opacity: float=1.0, length: float=1.0, use_lighting: bool=False, hide_zeros: bool=False) -> None:
-    """Show an interactive visualization window of a 3D or 4D input image with values in [0, 255]. If 4D, the color dimension must be the fourth dimension, with shape (h, w, d, 3)."""
-
-    application = QApplication(sys.argv)
-    gui = InferenceWindow()
-    ren = gui.ren
-    window = gui.renwin
-
-    actor = make_actor_input(array, opacity, length, use_lighting, hide_zeros)
-    ren.AddActor(actor)
-
-    ren.ResetCamera()
-    window.Render()
-    gui.show()
-    sys.exit(application.exec_())
-
 def convert_output_to_lattice(output: list) -> Tuple[list, list, list]:
     """Convert a list of tuples (strut number, diameter) into a tuple of coordinates and diameters."""
 
@@ -145,8 +129,15 @@ def convert_graph_to_lattice(graph) -> Tuple[list, list, list]:
 
     return coordinates_1, coordinates_2, diameters
 
-def make_actor_input(array: np.ndarray, opacity: float=1.0, length: float=1.0, use_lighting: bool=False, hide_zeros: bool=False):
-    """Return an actor of a voxel model."""
+def make_actor_density(array: np.ndarray, opacity: float=1.0, length: float=1.0, use_lighting: bool=False, hide_zeros: bool=False):
+    """Return an actor of a voxel model.
+    
+    `array`: A 3D (grayscale) or 4D (color) array with values in [0, 255]. If 4D, the color dimension must have values in [0, 1] and must be the fourth dimension, with shape (h, w, d, 3).
+    `opacity`: The opacity of the actor, with a value in [0, 1].
+    `length`: The size of each voxel.
+    `use_lighting`: True to enable lighting on the actor.
+    `hide_zeros`: Hide voxels with values of 0.
+    """
 
     array = np.array(array)
     
@@ -189,13 +180,25 @@ def make_actor_input(array: np.ndarray, opacity: float=1.0, length: float=1.0, u
 
     return actor
 
-def make_actor_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float], resolution: int=5):
-    """Return an actor of a lattice."""
+def make_actor_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float], resolution: int=5, show_bounding_box: bool=False, translation: Tuple[float, float, float]=None):
+    """Return an actor of a lattice defined as a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters. All lists must be the same length.
+    
+    `resolution`: The number of sides on each tube.
+    `show_bounding_box`: Show an outline of the bounding box of the volume.
+    `translation`: The (X, Y, Z) coordinates by which to shift the entire lattice.
+    """
+
+    assert len(locations_1) == len(locations_2) == len(diameters)
 
     data = vtk.vtkAppendPolyData()
 
     volume = 0
     for i, ((x1, y1, z1), (x2, y2, z2), diameter) in enumerate(zip(locations_1, locations_2, diameters)):
+        if translation is not None:
+            dx, dy, dz = translation
+            x1, y1, z1 = x1 + dx, y1 + dy, z1 + dz
+            x2, y2, z2 = x2 + dx, y2 + dy, z2 + dz
+
         line = vtk.vtkLineSource()
         line.SetPoint1(x1, y1, z1)
         line.SetPoint2(x2, y2, z2)
@@ -212,6 +215,11 @@ def make_actor_lattice(locations_1: List[Tuple[float, float, float]], locations_
 
         data.AddInputConnection(tube.GetOutputPort())
     print(f"Volume {volume}, {len(diameters)} struts")
+
+    if show_bounding_box:
+        outline = vtk.vtkOutlineSource()
+        outline.SetBounds(0, 10, 0, 10, 0, 10)
+        data.AddInputConnection(outline.GetOutputPort())
 
     # # Add spheres at the 8 corners.
     # x, y, z = list(zip(*(locations_1 + locations_2)))
@@ -246,10 +254,8 @@ def export_stl(actor: vtk.vtkActor, filename: str) -> None:
     writer.SetInputData(actor.GetMapper().GetInput())
     writer.Write()
 
-def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2: List[Tuple[float, float, float]], diameters: List[float], resolution: int=4, screenshot_filename: str=None, gui: bool=False) -> None:
-    """Show an interactive visualization window of a lattice defined as a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters. All lists must be the same length."""
-
-    assert len(locations_1) == len(locations_2) == len(diameters)
+def visualize_actors(*actors, gui: bool=False):
+    """Show an interactive visualization window or a GUI of the given actor(s)."""
 
     if gui:
         application = QApplication(sys.argv)
@@ -257,6 +263,7 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         ren = gui.ren
         iren = gui.iren
         window = gui.renwin
+
     else:
         ren = vtk.vtkRenderer()
         window = vtk.vtkRenderWindow()
@@ -266,35 +273,11 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
         iren.SetRenderWindow(window)
 
-    data = vtk.vtkAppendPolyData()
+    # Add each actor.
+    for actor in actors:
+        ren.AddActor(actor)
 
-    for i, ((x1, y1, z1), (x2, y2, z2), diameter) in enumerate(zip(locations_1, locations_2, diameters)):
-        line = vtk.vtkLineSource()
-        line.SetPoint1(x1, y1, z1)
-        line.SetPoint2(x2, y2, z2)
-        line.SetResolution(0)
-        line.Update()
-
-        radius = diameter / 2
-        tube = vtk.vtkTubeFilter()
-        tube.SetInputData(line.GetOutput())
-        tube.SetRadius(radius)
-        tube.SetNumberOfSides(resolution)
-
-        data.AddInputConnection(tube.GetOutputPort())
-    
-    # outline = vtk.vtkOutlineSource()
-    # outline.SetBounds(0, 10, 0, 10, 0, 10)
-    # data.AddInputConnection(outline.GetOutputPort())
-
-    mapper = vtk.vtkPolyDataMapper()
-    mapper.SetInputConnection(data.GetOutputPort())
-    actor = vtk.vtkActor()
-    actor.SetMapper(mapper)
-    # actor.GetProperty().SetLighting(False)
-    ren.AddActor(actor)
-
-    # Add the axes actor.
+    # Add the axes widget.
     axes = vtk.vtkAxesActor()
     widget = vtk.vtkOrientationMarkerWidget()
     widget.SetOrientationMarker(axes)
@@ -307,6 +290,7 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         window.Render()
         gui.show()
         sys.exit(application.exec_())
+    
     else:
         ren.GetActiveCamera().SetParallelProjection(True)
         ren.ResetCamera()
@@ -315,80 +299,9 @@ def visualize_lattice(locations_1: List[Tuple[float, float, float]], locations_2
         iren.Initialize()
         window.Render()
         iren.Start()
-    
-    # Save the window as a PNG image. Must have a visualization running first.
-    if screenshot_filename is not None:
-        filter = vtk.vtkWindowToImageFilter()
-        filter.SetInput(window)
-        # filter.SetScale(1)
-        filter.SetInputBufferTypeToRGB()
-        filter.Update()
-
-        writer = vtk.vtkPNGWriter()
-        writer.SetFileName(os.path.join('Screenshots', str(screenshot_filename) + '.png'))
-        writer.SetInputConnection(filter.GetOutputPort())
-        writer.Write()
-
-def visualize_actor_gui(actor):
-    """Show an interactive visualization window of an actor."""
-
-    application = QApplication(sys.argv)
-    gui = InferenceWindow()
-    ren = gui.ren
-    window = gui.renwin
-
-    ren.AddActor(actor)
-    ren.ResetCamera()
-    window.Render()
-    gui.show()
-    sys.exit(application.exec_())
 
 
 if __name__ == "__main__":
-    # inputs = read_pickle('Training_Data_11/inputs.pickle')
-    # visualize_input(inputs[0, 0, ...]*255, opacity=1, length=1.0, use_lighting=not True)
-
-    # # input_ = read_mat('Training_Data_11/Input_Data/Density_1', 'Density') * 255
-    # # plt.figure()
-    # # plt.imshow(input_[:, :, 2], cmap='gray')
-    # # plt.show()
-    # # visualize_input(input_, opacity=1, length=1.0, use_lighting=not True)
-
-    # i = 5  #random.randint(1, 100) - 1;  print(i)
-    # inputs = read_pickle('Training_Data_11/inputs.pickle') * 255
-    # outputs = read_outputs(i+1)
-    # inputs = apply_mask_inputs(inputs, outputs)
-    # inputs[inputs <= 128] = 0
-    # lattice = convert_output_to_lattice(outputs[-1])
-    # lattice = list(zip(*[_ for _ in zip(*lattice) if _[-1] > 0.5]))
-    # # visualize_lattice(*lattice)
-    # visualize_input(inputs[i, 0, ...], hide_zeros=True)
-
-    # # graphs = read_pickle('Training_Data_10/graphs.pickle')
-    # # lattice = convert_graph_to_lattice(graphs[0])
-    # # visualize_lattice(*lattice)
-
-    # # Show struts used in centered strut dataset
-    # # struts = make_struts(2, (11,)*3)
-    # # print(struts)
-    # # locations_1 = [_[0] for _ in struts]
-    # # locations_2 = [_[1] for _ in struts]
-    # # diameters = [0.25] * len(struts)
-    # # visualize_lattice(locations_1, locations_2, diameters, gui=1)
-
-    # # Load a .mat file of a lattice generated with GRAND3.
-    # from scipy.io import loadmat
-    # data = loadmat('grand3.mat')
-    # locations_1 = [tuple(_) for _ in data['locations_1'].astype(int)]
-    # locations_2 = [tuple(_) for _ in data['locations_2'].astype(int)]
-    # diameters = list(data['diameters'].squeeze())
-
-    # volume = 0
-    # for (x1, y1, z1), (x2, y2, z2), diameter in zip(locations_1, locations_2, diameters):
-    #     dv = (np.pi * (diameter/2) ** 2) * ((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2) ** 0.5
-    #     volume += dv
-    # print(f"Volume of {volume}, {len(diameters)} struts")
-
     from scipy.io import loadmat
     data = loadmat('top.mat')
     density = data['x']

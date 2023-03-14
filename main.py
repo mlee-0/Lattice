@@ -510,10 +510,11 @@ def main(
             # # metrics.plot_error_by_xy_edge_distance(outputs, labels, locations_1, locations_2)
 
             for i in range(2):
-                print('Prediction')
-                visualize_lattice(*convert_array_to_lattice(outputs[i, ...]))
-                print('Label')
-                visualize_lattice(*convert_array_to_lattice(labels[i, ...]))
+                # Show the prediction and label side-by-side, with label shown on right.
+                actor_output = make_actor_lattice(*convert_array_to_lattice(outputs[i, ...]))
+                actor_label = make_actor_lattice(*convert_array_to_lattice(labels[i, ...]), translation=(12, 0, 0))
+                visualize_actors(actor_output, actor_label, gui=False)
+
 
             # # If predicting local strut diameters, visualize the predictions on all struts in a single lattice structure.
             # dataset.p = 1.0
