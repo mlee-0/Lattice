@@ -18,11 +18,15 @@ class LatticeDataset(torch.utils.data.Dataset):
     # Maximum value to scale diameters to.
     DIAMETER_SCALE = 100
 
-    def __init__(self, normalize_inputs: bool=True) -> None:
+    def __init__(self, size: int=None, normalize_inputs: bool=True) -> None:
         super().__init__()
 
         self.inputs = read_pickle(os.path.join(DATASET_FOLDER, 'inputs_augmented.pickle')).float()
         self.outputs = read_pickle(os.path.join(DATASET_FOLDER, 'outputs_array_augmented.pickle')).float()
+
+        if size is not None:
+            self.inputs = self.inputs[:size]
+            self.outputs = self.outputs[:size]
 
         # Add a second binary channel with values of either -1 (inactive nodes) or 1 (active nodes).
         self.inputs = torch.cat(
@@ -256,6 +260,35 @@ class StrutDataset(torch.utils.data.Dataset):
 #     def __getitem__(self, index):
 #         # Return the entire graph. Returning individual attributes (x, edge_index, y) results in incorrect batching.
 #         return self.dataset[index]
+
+class AutoencoderDataset(torch.utils.data.Dataset):
+    def __init__(self) -> None:
+        super().__init__()
+
+        self.inputs = read_pickle(os.path.join(DATASET_FOLDER, 'inputs_augmented.pickle')).float()
+        self.outputs = read_pickle(os.path.join(DATASET_FOLDER, 'outputs_array_augmented.pickle')).float()
+
+        self.inputs = self.inputs[:1000, ...]
+        self.outputs = self.outputs[:1000, ...]
+
+        # Add a second binary channel with values of either -1 (inactive nodes) or 1 (active nodes).
+        self.inputs = torch.cat(
+            (self.inputs, torch.any(self.outputs > 0, dim=1, keepdim=True) * 2 - 1),
+            dim=1,
+        )
+
+        # Normalize input data.
+        self.input_mean = self.inputs.mean()
+        self.input_std = self.inputs.std()
+
+        self.inputs -= self.input_mean
+        self.inputs /= self.input_std
+
+    def __len__(self) -> int:
+        return self.inputs.size(0)
+
+    def __getitem__(self, index):
+        return self.inputs[index, ...], self.inputs[index, ...]
 
 class LatticeInferenceDataset(torch.utils.data.Dataset):
     """A dataset for testing the network on custom-generated density."""

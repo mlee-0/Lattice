@@ -98,6 +98,25 @@ class LatticeNet(Module):
         # Number of output channels in the first layer.
         c = 4
 
+        # self.layers = Sequential(
+        #     Conv3d(input_channels, 3, 3, 1, 'same'),
+        #     BatchNorm3d(3),
+        #     ReLU(inplace=True),
+        #     Conv3d(3, 5, 3, 1, 'same'),
+        #     BatchNorm3d(5),
+        #     ReLU(inplace=True),
+        #     Conv3d(5, 7, 3, 1, 'same'),
+        #     BatchNorm3d(7),
+        #     ReLU(inplace=True),
+        #     Conv3d(7, 9, 3, 1, 'same'),
+        #     BatchNorm3d(9),
+        #     ReLU(inplace=True),
+        #     Conv3d(9, 11, 3, 1, 'same'),
+        #     BatchNorm3d(11),
+        #     ReLU(inplace=True),
+        #     Conv3d(11, 13, 3, 1, 'same'),
+        # )
+
         self.convolution_initial = Sequential(
             Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
             BatchNorm3d(c*1),
@@ -122,6 +141,9 @@ class LatticeNet(Module):
         )
 
     def forward(self, x):
+        # x = self.layers(x)
+        # x = torch.clip(x, 0, self.output_max)
+
         x = self.convolution_initial(x)
 
         x = torch.relu(x + self.residual_1(x))
@@ -153,6 +175,141 @@ class LatticeNet(Module):
         # Variant of ReLU in which values are clipped to 0 and the specified maximum.
         x = torch.clip(x, 0, self.output_max)
 
+        return x
+
+class UNet(Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+        c = 4
+
+        self.convolution_1 = Sequential(
+            Conv3d(2, c*1, 3, 1, 1),
+            BatchNorm3d(c*1),
+            ReLU(),
+            Conv3d(c*1, c*1, 3, 1, 1),
+            BatchNorm3d(c*1),
+            ReLU(),
+        )
+        self.convolution_2 = Sequential(
+            Conv3d(c*1, c*2, 3, 2, 1),
+            BatchNorm3d(c*2),
+            ReLU(),
+            Conv3d(c*2, c*2, 3, 1, 1),
+            BatchNorm3d(c*2),
+            ReLU(),
+        )
+        self.convolution_3 = Sequential(
+            Conv3d(c*2, c*4, 3, 2, 1),
+            BatchNorm3d(c*4),
+            ReLU(),
+            Conv3d(c*4, c*4, 3, 1, 1),
+            BatchNorm3d(c*4),
+            ReLU(),
+        )
+        self.deconvolution_1 = Sequential(
+            ConvTranspose3d(c*4+c*2, c*4, 3, 1, 1),
+            BatchNorm3d(c*4),
+            ReLU(),
+            ConvTranspose3d(c*4, c*2, 3, 2, 1, output_padding=1),
+            BatchNorm3d(c*2),
+            ReLU(),
+        )
+        self.deconvolution_2 = Sequential(
+            ConvTranspose3d(c*2+c*1, c*2, 3, 1, 1),
+            BatchNorm3d(c*2),
+            ReLU(),
+            ConvTranspose3d(c*2, c*1, 3, 2, 1),
+            BatchNorm3d(c*1),
+            ReLU(),
+        )
+        self.deconvolution_3 = Sequential(
+            ConvTranspose3d(c*1, c*1, 3, 1, 1),
+            BatchNorm3d(c*1),
+            ReLU(),
+            ConvTranspose3d(c*1, 13, 3, 1, 1),
+        )
+
+    def forward(self, x):
+        x_1 = self.convolution_1(x)
+        x_2 = self.convolution_2(x_1)
+        x_3 = self.convolution_3(x_2)
+        x_4 = self.deconvolution_1(torch.cat([x_2[..., 1:4, 1:4, 1:4], x_3], dim=1))
+        x_5 = self.deconvolution_2(torch.cat([x_1[..., 3:9, 3:9, 3:9], x_4], dim=1))
+        x_6 = self.deconvolution_3(x_5)
+        x = torch.clip(x_6, 0, 100)
+        return x
+
+class NoRelu(Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+        c = 4
+
+        self.layers = Sequential(
+            Conv3d(2, c*1, 3, 1, 1),
+            BatchNorm3d(c*1),
+            Conv3d(c*1, c*2, 3, 1, 1),
+            BatchNorm3d(c*2),
+            Conv3d(c*2, 13, 3, 1, 1),
+        )
+
+    def forward(self, x):
+        x = self.layers(x)
+        x = torch.clip(x, 0, 100)
+        return x
+
+class TwoBranch(Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+        # self.branch_1 = Sequential(
+        #     Conv3d(1, 4, 3, 1, 'same', padding_mode='reflect'),
+        #     BatchNorm3d(4),
+        #     ReLU(inplace=True),
+        #     Conv3d(4, 8, 3, 1, 'same', padding_mode='zeros'),
+        #     BatchNorm3d(8),
+        #     ReLU(inplace=True),
+        #     Conv3d(8, 13, 3, 1, 'same', padding_mode='zeros'),
+        #     BatchNorm3d(13),
+        #     ReLU(inplace=True),
+        # )
+
+        self.branch_2 = Sequential(
+            Conv3d(1, 1, 5, 1, 'same'),
+        )
+
+        self.convolution_1 = Sequential(
+            Conv3d(1, 4, 5, 1, 'same'),
+            BatchNorm3d(4),
+            ReLU(inplace=True),
+        )
+        self.residual_1 = residual(4, 4)
+        self.convolution_2 = Sequential(
+            Conv3d(4, 8, 1, 1, 'same'),
+            BatchNorm3d(8),
+            ReLU(inplace=True),
+        )
+        self.residual_2 = residual(8, 8)
+        self.convolution_3 = Sequential(
+            Conv3d(8, 13, 1, 1, 'same'),
+            BatchNorm3d(13),
+            ReLU(inplace=True),
+        )
+        self.residual_3 = residual(13, 13)
+    
+    def forward(self, x):
+        x1 = self.convolution_1(x[:, 0:1, ...])
+        x1 = torch.relu(x1 + self.residual_1(x1))
+        x1 = self.convolution_2(x1)
+        x1 = torch.relu(x1 + self.residual_2(x1))
+        x1 = self.convolution_3(x1)
+        x1 = torch.relu(x1 + self.residual_3(x1))
+
+        x2 = self.branch_2(x[:, 1:2, ...])
+
+        x = x1 * x2
+        x = torch.clip(x, 0, 100)
         return x
 
 class ResNetMasked(Module):
@@ -338,3 +495,195 @@ class MLP(Module):
     
 #     def forward(self, density, edge_index):
 #         x = self.convolution_1(density)
+
+
+class Autoencoder1(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+        input_channels = 2
+        c = 4
+
+        self.convolution_1 = Sequential(
+            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(num_features=c*1),
+            ReLU(inplace=True),
+        )
+        self.convolution_2 = Sequential(
+            Conv3d(in_channels=c*1, out_channels=c*2, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(num_features=c*2),
+            ReLU(inplace=True),
+        )
+        self.convolution_3 = Sequential(
+            Conv3d(in_channels=c*2, out_channels=c*4, kernel_size=3, stride=1, padding='same'),
+            BatchNorm3d(num_features=c*4),
+            ReLU(inplace=True),
+        )
+
+        self.deconvolution_1 = Sequential(
+            ConvTranspose3d(in_channels=c*4, out_channels=c*2, kernel_size=3, stride=1, padding=1),
+            BatchNorm3d(num_features=c*2),
+            ReLU(inplace=True),
+        )
+        self.deconvolution_2 = Sequential(
+            ConvTranspose3d(in_channels=c*2, out_channels=c*1, kernel_size=3, stride=1, padding=1),
+            BatchNorm3d(num_features=c*1),
+            ReLU(inplace=True),
+        )
+        self.deconvolution_3 = Sequential(
+            ConvTranspose3d(in_channels=c*1, out_channels=input_channels, kernel_size=3, stride=1, padding=1),
+        )
+    
+    def forward(self, x):
+        x = self.convolution_1(x)
+        x = self.convolution_2(x)
+        x = self.convolution_3(x)
+        x = self.deconvolution_1(x)
+        x = self.deconvolution_2(x)
+        x = self.deconvolution_3(x)
+        return x
+
+class Autoencoder2(torch.nn.Module):
+    """Downsampling"""
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        input_channels = 2
+        c = 32
+
+        self.convolution_1 = Sequential(
+            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=2, padding=1),
+            BatchNorm3d(num_features=c*1),
+            ReLU(inplace=True),
+        )
+        self.convolution_2 = Sequential(
+            Conv3d(in_channels=c*1, out_channels=c*2, kernel_size=3, stride=2, padding=1),
+            BatchNorm3d(num_features=c*2),
+            ReLU(inplace=True),
+        )
+        self.convolution_3 = Sequential(
+            Conv3d(in_channels=c*2, out_channels=c*4, kernel_size=3, stride=2, padding=1),
+            BatchNorm3d(num_features=c*4),
+            ReLU(inplace=True),
+        )
+
+        self.deconvolution_1 = Sequential(
+            ConvTranspose3d(in_channels=c*4, out_channels=c*2, kernel_size=3, stride=2, padding=1, output_padding=0),
+            BatchNorm3d(num_features=c*2),
+            ReLU(inplace=True),
+        )
+        self.deconvolution_2 = Sequential(
+            ConvTranspose3d(in_channels=c*2, out_channels=c*1, kernel_size=3, stride=2, padding=1, output_padding=1),
+            BatchNorm3d(num_features=c*1),
+            ReLU(inplace=True),
+        )
+        self.deconvolution_3 = Sequential(
+            ConvTranspose3d(in_channels=c*1, out_channels=input_channels, kernel_size=3, stride=2, padding=1, output_padding=0),
+        )
+    
+    def forward(self, x):
+        x = self.convolution_1(x)
+        x = self.convolution_2(x)
+        x = self.convolution_3(x)
+        x = self.deconvolution_1(x)
+        x = self.deconvolution_2(x)
+        x = self.deconvolution_3(x)
+        return x
+
+class Autoencoder3(torch.nn.Module):
+    """1 conv layer"""
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        self.convolution_1 = Sequential(
+            Conv3d(in_channels=2, out_channels=13, kernel_size=11, stride=1, padding='same'),
+            BatchNorm3d(13),
+            ReLU(),
+        )
+        self.deconvolution_1 = ConvTranspose3d(13, 2, kernel_size=11, stride=1, padding=5)
+    
+    def forward(self, x):
+        x = self.convolution_1(x)
+        x = self.deconvolution_1(x)
+        return x
+
+class Autoencoder4(torch.nn.Module):
+    """1x1 conv"""
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        input_channels = 2
+        c = 32
+
+        self.convolution_1 = Sequential(
+            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=1, stride=1, padding=0),
+            BatchNorm3d(num_features=c*1),
+            ReLU(inplace=True),
+        )
+        self.convolution_2 = Sequential(
+            Conv3d(in_channels=c*1, out_channels=c*2, kernel_size=1, stride=1, padding=0),
+            BatchNorm3d(num_features=c*2),
+            ReLU(inplace=True),
+        )
+        self.convolution_3 = Sequential(
+            Conv3d(in_channels=c*2, out_channels=c*4, kernel_size=1, stride=1, padding=0),
+            BatchNorm3d(num_features=c*4),
+            ReLU(inplace=True),
+        )
+
+        self.deconvolution_1 = Sequential(
+            ConvTranspose3d(in_channels=c*4, out_channels=c*2, kernel_size=1, stride=1, padding=0),
+            BatchNorm3d(num_features=c*2),
+            ReLU(inplace=True),
+        )
+        self.deconvolution_2 = Sequential(
+            ConvTranspose3d(in_channels=c*2, out_channels=c*1, kernel_size=1, stride=1, padding=0),
+            BatchNorm3d(num_features=c*1),
+            ReLU(inplace=True),
+        )
+        self.deconvolution_3 = Sequential(
+            ConvTranspose3d(in_channels=c*1, out_channels=input_channels, kernel_size=1, stride=1, padding=0),
+        )
+    
+    def forward(self, x):
+        x = self.convolution_1(x)
+        x = self.convolution_2(x)
+        x = self.convolution_3(x)
+        x = self.deconvolution_1(x)
+        x = self.deconvolution_2(x)
+        x = self.deconvolution_3(x)
+        return x
+
+class Autoencoder5(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+        input_channels = 2
+        c = 4
+
+        self.conv_1 = Conv3d(input_channels, c*1, 1, 1, 0)
+        self.res_1 = residual(c*1, c*1)
+        self.res_2 = residual(c*1, c*1)
+        self.conv_2 = Conv3d(c*1, c*2, 1, 1, 0)
+        self.res_3 = residual(c*2, c*2)
+        self.res_4 = residual(c*2, c*2)
+        self.conv_3 = Conv3d(c*2, c*1, 1, 1, 0)
+        self.res_5 = residual(c*1, c*1)
+        self.res_6 = residual(c*1, c*1)
+        self.conv_4 = Conv3d(c*1, input_channels, 1, 1, 0)
+
+    def forward(self, x):
+        x = self.conv_1(x)
+        x = torch.relu(x + self.res_1(x))
+        x = torch.relu(x + self.res_2(x))
+        x = self.conv_2(x)
+        x = torch.relu(x + self.res_3(x))
+        x = torch.relu(x + self.res_4(x))
+        x = self.conv_3(x)
+        x = torch.relu(x + self.res_5(x))
+        x = torch.relu(x + self.res_6(x))
+        x = self.conv_4(x)
+        return x

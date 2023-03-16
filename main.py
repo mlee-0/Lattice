@@ -515,6 +515,16 @@ def main(
                 actor_label = make_actor_lattice(*convert_array_to_lattice(labels[i, ...]), translation=(12, 0, 0))
                 visualize_actors(actor_output, actor_label, gui=False)
 
+            # # Visualize autoencoder predictions.
+            # i = 1
+            # outputs *= dataset.input_std.item()
+            # outputs += dataset.input_mean.item()
+            # labels *= dataset.input_std.item()
+            # labels += dataset.input_mean.item()
+            # print(outputs.min(), outputs.max(), labels.min(), labels.max())
+            # output = np.concatenate([outputs[i, 0, ...], np.zeros((1, 11, 11)), outputs[i, 1, ...]], axis=0)
+            # label = np.concatenate([labels[i, 0, ...], np.zeros((1, 11, 11)), labels[i, 1, ...]], axis=0)
+            # visualize_input(np.concatenate([output, np.zeros((11+1+11, 1, 11)), label], axis=1) * 255, hide_zeros=True)
 
             # # If predicting local strut diameters, visualize the predictions on all struts in a single lattice structure.
             # dataset.p = 1.0
@@ -595,8 +605,8 @@ if __name__ == "__main__":
         "visualize_results": True,
 
         "train_existing": not True,
-        "filename_model": "model.pth",
-        "save_model_every": 1,
+        "filename_model": "two_branch.pth",
+        "save_model_every": 10,
 
         "epoch_count": 10,
         "learning_rate": 1e-3,
@@ -605,7 +615,9 @@ if __name__ == "__main__":
         "data_split": (0.8, 0.1, 0.1),
         
         "dataset": LatticeDataset(normalize_inputs=True),
-        "model": ResNetArray(output_max=LatticeDataset.DIAMETER_SCALE),
+        "model": TwoBranch(), #LatticeNet(output_max=LatticeDataset.DIAMETER_SCALE),
+        # "dataset": AutoencoderDataset(),
+        # "model": Autoencoder5(),
         "Optimizer": torch.optim.Adam,
         "loss_function": nn.MSELoss(),
     }
@@ -613,16 +625,94 @@ if __name__ == "__main__":
     main(**kwargs)
 
 
-    # generator = infer(
-    #     model=ResNet(),
-    #     filename_model="model_5conv_res.pth",
-    #     dataset=InferenceDataset('circle'),
-    #     batch_size=100,
-    # )
+"""
+2 final conv layers:
+Testing loss: 2.89e+00
+Mean Error: -0.0010
+MAE: 0.0026
+MAE (nonzero): 0.0382
+MRE (nonzero): 7.5596
+Min error: -1.0000
+Max error: 0.8653
 
-    # tic = time.time()
-    # for locations_1, locations_2, diameters in generator:
-    #     visualize_lattice(locations_1, locations_2, diameters, gui=False, screenshot_filename=f"{i:03}")
-    # toc = time.time()
-    # print(f"Generated {len(dataset)} struts in {toc - tic:.1f} seconds.")
-    # visualize_lattice(locations_1, locations_2, diameters, gui=True)
+c = 8 instead of c = 4: interrupted at epoch 7 b/c bad
+Testing loss: 1.81e+01
+Mean Error: -0.0015
+MAE: 0.0053
+MAE (nonzero): 0.0808
+MRE (nonzero): 15.7535
+Min error: -1.0000
+Max error: 1.0000
+
+c = 2 instead of c = 4: not good
+Testing loss: 3.58e+01
+Mean Error: -0.0061
+MAE: 0.0080
+MAE (nonzero): 0.1231
+MRE (nonzero): 23.1958
+Min error: -1.0000
+Max error: 0.6509
+
+U-Net (2023-03-14) (model overwritten):
+Not good b/c of downscaling
+
+No ReLU (2023-03-15):
+Testing loss: 4.41e+00
+Mean Error: 0.0002
+MAE: 0.0029
+MAE (nonzero): 0.0426
+MRE (nonzero): 8.6815
+Min error: -1.0000
+Max error: 0.3261
+
+TwoBranch (2023-03-15):
+Testing loss: 3.41e+00
+Mean Error: -0.0001
+MAE: 0.0029
+MAE (nonzero): 0.0399
+MRE (nonzero): 8.1583
+Min error: -1.0000
+Max error: 0.5803
+
+TwoBranch (2023-03-16):
+Testing loss: 5.17e+00
+Mean Error: -0.0008
+MAE: 0.0049
+MAE (nonzero): 0.0516
+MRE (nonzero): 9.6341
+Min error: -1.0000
+Max error: 0.4489
+"""
+
+
+"""
+Autoencoder 1 (50 epochs, not converged):
+Testing loss: 1.82e-02
+Mean Error: -0.0021
+MAE: 0.1018
+MAE (nonzero): 0.1108
+MRE (nonzero): 14.1897
+Min error: -0.9737
+Max error: 0.9556
+
+Autoencoder 2 (50 epochs, c=32)
+Testing loss: 9.37e-02
+Mean Error: -0.0091
+MAE: 0.1759
+MAE (nonzero): 0.1857
+MRE (nonzero): 20.6569
+Min error: -2.7697
+Max error: 2.7902
+
+Autoencoder 3 (50 epochs):
+Testing loss: 2.65e-02
+Mean Error: -0.0336
+MAE: 0.1243
+MAE (nonzero): 0.1316
+MRE (nonzero): 15.8180
+Min error: -1.6666
+Max error: 0.8866
+
+Autoencoder 4 (50 epochs):
+
+"""

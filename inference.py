@@ -52,7 +52,7 @@ def load_stress_density(*args):
     density -= density.min()
     density /= density.max()
 
-    density = np.pad(density, (6, 6), mode='maximum')
+    # density = np.pad(density, (6, 6), mode='maximum')
 
     return density
 
