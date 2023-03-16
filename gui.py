@@ -391,7 +391,7 @@ class InferenceWindow(QMainWindow):
         layout.addRow('Density size', layout_)
 
         self.field_density_function = QComboBox()
-        self.field_density_function.addItems(['linear', 'sin', 'exp', 'random', 'stress', 'top. opt.'])
+        self.field_density_function.addItems(['stress', 'top. opt.', 'linear', 'sin', 'exp', 'random'])
         layout.addRow('Density function', self.field_density_function)
 
         self.field_lattice_height = QSpinBox()
@@ -400,9 +400,9 @@ class InferenceWindow(QMainWindow):
         self.field_lattice_height.setRange(1, 100)
         self.field_lattice_width.setRange(1, 100)
         self.field_lattice_depth.setRange(1, 100)
-        self.field_lattice_height.setValue(15)
-        self.field_lattice_width.setValue(30)
-        self.field_lattice_depth.setValue(15)
+        self.field_lattice_height.setValue(5)
+        self.field_lattice_width.setValue(10)
+        self.field_lattice_depth.setValue(5)
         layout_ = QHBoxLayout()
         layout_.setSpacing(0)
         layout_.addWidget(self.field_lattice_height)
@@ -414,15 +414,33 @@ class InferenceWindow(QMainWindow):
         self.field_lattice_type.addItems(['rectangle', 'circle', 'random'])
         layout.addRow('Lattice type', self.field_lattice_type)
 
+        self.field_diameter_min = QDoubleSpinBox()
+        self.field_diameter_min.setValue(0.1)
+        self.field_diameter_max = QDoubleSpinBox()
+        self.field_diameter_max.setValue(0.9)
+        self.field_diameter_min.setEnabled(False)
+        self.field_diameter_max.setEnabled(False)
+        layout_ = QHBoxLayout()
+        layout_.setSpacing(0)
+        layout_.addWidget(self.field_diameter_min)
+        layout_.addWidget(self.field_diameter_max)
+
+        self.checkbox_scale_diameters = QCheckBox('Scale diameters')
+        self.checkbox_scale_diameters.stateChanged.connect(
+            lambda state: (self.field_diameter_min.setEnabled(state), self.field_diameter_max.setEnabled(state))
+        )
+        layout.addRow(self.checkbox_scale_diameters)
+        layout.addRow('Diameter range', layout_)
+
         self.field_model = QLineEdit('model.pth')
         layout.addRow('Model', self.field_model)
 
-        self.field_batch_size = QSpinBox()
-        self.field_batch_size.setRange(1, 1000)
-        layout.addRow('Batch size', self.field_batch_size)
+        # self.field_batch_size = QSpinBox()
+        # self.field_batch_size.setRange(1, 1000)
+        # layout.addRow('Batch size', self.field_batch_size)
 
-        self.checkbox_screenshot = QCheckBox('Screenshot each batch')
-        layout.addRow(self.checkbox_screenshot)
+        # self.checkbox_screenshot = QCheckBox('Screenshot each batch')
+        # layout.addRow(self.checkbox_screenshot)
 
         # Fields related to the camera.
         box = QGroupBox('Camera')
@@ -438,7 +456,7 @@ class InferenceWindow(QMainWindow):
         layout_.addWidget(self.button_decrease_azimuth)
         layout_.addWidget(self.button_increase_azimuth)
         layout.addRow('Horizontal', layout_)
-        
+
         layout_ = QHBoxLayout()
         layout_.setSpacing(0)
         self.button_decrease_elevation = QPushButton('▼')
@@ -453,7 +471,19 @@ class InferenceWindow(QMainWindow):
         button_reset.clicked.connect(self.reset)
         layout.addRow(button_reset)
 
-        button_screenshot = QPushButton('Screenshot')
+        # Fields related to saving screenshots.
+        box = QGroupBox('Screenshot')
+        layout = QFormLayout(box)
+        main_layout.addWidget(box)
+
+        self.field_screenshot_filename = QLineEdit('screenshot.png')
+        layout.addRow('Filename', self.field_screenshot_filename)
+
+        self.field_screenshot_scale = QDoubleSpinBox()
+        self.field_screenshot_scale.setValue(2)
+        layout.addRow('Scale', self.field_screenshot_scale)
+
+        button_screenshot = QPushButton('Save')
         button_screenshot.clicked.connect(self.save_screenshot)
         layout.addRow(button_screenshot)
 
@@ -471,7 +501,7 @@ class InferenceWindow(QMainWindow):
         return widget
 
     def save_screenshot(self):
-        scale = 2
+        scale = self.field_screenshot_scale.value()
 
         filter = vtk.vtkWindowToImageFilter()
         filter.SetInput(self.renwin)
@@ -480,7 +510,7 @@ class InferenceWindow(QMainWindow):
         filter.Update()
 
         writer = vtk.vtkPNGWriter()
-        writer.SetFileName(os.path.join('Screenshots', f'{self.batch:03}.png'))
+        writer.SetFileName(os.path.join('Screenshots', f'{self.field_screenshot_filename.text()}'))
         writer.SetInputConnection(filter.GetOutputPort())
         writer.Write()
 
@@ -508,6 +538,14 @@ class InferenceWindow(QMainWindow):
         output /= 100
         toc = time.time()
         self.label_runtime.setText(f"Generated {np.sum(output > 0)} struts in {toc - tic:.2f} s")
+
+        # Scale the diameters.
+        if self.checkbox_scale_diameters.isChecked():
+            diameter_min, diameter_max = self.field_diameter_min.value(), self.field_diameter_max.value()
+            output[output > 0] -= output[output > 0].min()
+            output[output > 0] /= output[output > 0].max()
+            output[output > 0] *= (diameter_max - diameter_min)
+            output[output > 0] += diameter_min
 
         locations_1, locations_2, diameters = convert_array_to_lattice(output[0, ...])
         actor = make_actor_lattice(locations_1, locations_2, diameters, resolution=3)

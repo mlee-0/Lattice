@@ -129,13 +129,53 @@ def visualize_output():
     actor = make_actor_lattice(*convert_array_to_lattice(data), resolution=100)
     visualize_actors(actor, gui=True)
 
-def visualize_unit_cell():
+def visualize_output_by_channel(channel: int):
+    data = read_pickle('Training_Data_11/outputs_array_augmented.pickle').numpy()
+    data = data[0, ...]
+    data[:channel, ...] = 0
+    data[channel+1:, ...] = 0
+    actor = make_actor_lattice(*convert_array_to_lattice(data), resolution=100)
+    visualize_actors(actor, gui=True)
+
+def plot_output():
+    """Plot each channel of the output matrix."""
+
+    data = read_pickle('Training_Data_11/outputs_array_augmented.pickle').numpy()
+
+    figure = plt.figure()
+    for i in range(data.shape[1]):
+        axis = figure.add_subplot(data.shape[1], 1, i+1, projection='3d')
+        axis.voxels(data[0, i, ...] > 0, facecolors=np.repeat(data[0, i, ..., None], 3, axis=-1))
+        # axis.axis(False)
+        axis.set_xticks([])
+        axis.set_yticks([])
+        axis.set_zticks([])
+        axis.set_title(f"Channel {i+1}", fontsize=8)
+
+        if i == data.shape[1]:
+            plt.colorbar()
+
+    plt.subplots_adjust(left=0, right=1, wspace=0)
+    plt.show()
+
+def visualize_struts():
     """Show the 26 struts extending from each node."""
 
     actor = make_actor_lattice(
         locations_1=[(0, 0, 0)]*26,
         locations_2=[(sign*x, sign*y, sign*z) for x, y, z in DIRECTIONS for sign in (-1, +1)],
         diameters=[0.25]*26,
+        resolution=100,
+    )
+    visualize_actors(actor, gui=True)
+
+def visualize_unique_struts():
+    """Show the 13 unique struts extending from each node."""
+
+    actor = make_actor_lattice(
+        locations_1=[(0, 0, 0)]*len(DIRECTIONS),
+        locations_2=DIRECTIONS,
+        diameters=[0.25]*len(DIRECTIONS),
         resolution=100,
     )
     visualize_actors(actor, gui=True)
@@ -161,4 +201,5 @@ def plot_data_augmentation():
     plt.show()
 
 if __name__ == '__main__':
-    visualize_unit_cell()
+    # visualize_output_by_channel(0)
+    plot_output()

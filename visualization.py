@@ -12,23 +12,8 @@ from gui import InferenceWindow
 from preprocessing import *
 
 
-def plot_nodes(array: np.ndarray, opacity: float=1.0) -> None:
-    """Show a 3D plot of node locations."""
-
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1, projection="3d")
-    ax.voxels(
-        filled=(array > 0),
-        facecolors=(1, 1, 1, opacity),
-        linewidth=0.25,
-        edgecolors=(1, 1, 1),
-    )
-    ax.set(xlabel="X", ylabel="Y", zlabel="Z")
-    # ax.set(xlim=axis_limits, ylim=axis_limits, zlim=axis_limits)
-    plt.show()
-
 def convert_output_to_lattice(output: list) -> Tuple[list, list, list]:
-    """Convert a list of tuples (strut number, diameter) into a tuple of coordinates and diameters."""
+    """Convert a list of (strut number, diameter) tuples into a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters."""
 
     coordinates = read_coordinates()
     struts = read_struts()
@@ -44,7 +29,7 @@ def convert_output_to_lattice(output: list) -> Tuple[list, list, list]:
     return coordinates_1, coordinates_2, diameters
 
 def convert_array_to_lattice(array: np.ndarray) -> Tuple[list, list, list]:
-    """Convert a 4D array into a tuple of coordinates and diameters."""
+    """Convert a 4D array into a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters."""
 
     indices = np.argwhere(array)
 
@@ -59,7 +44,7 @@ def convert_array_to_lattice(array: np.ndarray) -> Tuple[list, list, list]:
     return coordinates_1, coordinates_2, diameters
 
 def convert_adjacency_to_lattice(array: np.ndarray) -> Tuple[list, list, list]:
-    """Convert a 2D adjacency matrix into a tuple of coordinates and diameters."""
+    """Convert a 2D adjacency matrix into a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters."""
 
     coordinates = read_coordinates()
     node_numbers = make_node_numbers(coordinates)
@@ -95,7 +80,7 @@ def convert_adjacency_to_lattice(array: np.ndarray) -> Tuple[list, list, list]:
     return coordinates_1, coordinates_2, diameters
 
 def convert_vector_to_lattice(vector: np.ndarray) -> Tuple[list, list, list]:
-    """Convert a 1D array into a tuple of coordinates and diameters."""
+    """Convert a 1D array into a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters."""
     
     struts = read_struts()
     coordinates = read_coordinates()
@@ -115,7 +100,7 @@ def convert_vector_to_lattice(vector: np.ndarray) -> Tuple[list, list, list]:
     return coordinates_1, coordinates_2, diameters
 
 def convert_graph_to_lattice(graph) -> Tuple[list, list, list]:
-    """Convert a graph into a tuple of coordinates and diameters."""
+    """Convert a graph into a list of node 1 coordinates, a list of node 2 coordinates, and a list of diameters."""
 
     coordinates = read_coordinates()
 
