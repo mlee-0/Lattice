@@ -130,6 +130,8 @@ def visualize_output():
     visualize_actors(actor, gui=True)
 
 def visualize_output_by_channel(channel: int):
+    """Visualization of only the struts for the corresponding channel."""
+
     data = read_pickle('Training_Data_11/outputs_array_augmented.pickle').numpy()
     data = data[0, ...]
     data[:channel, ...] = 0
@@ -137,25 +139,26 @@ def visualize_output_by_channel(channel: int):
     actor = make_actor_lattice(*convert_array_to_lattice(data), resolution=100)
     visualize_actors(actor, gui=True)
 
-def plot_output():
-    """Plot each channel of the output matrix."""
+def plot_output_by_channel():
+    """Show each channel of the output matrix and save as files."""
 
     data = read_pickle('Training_Data_11/outputs_array_augmented.pickle').numpy()
+    # Transpose and flip the array to match the coordinate system of the VTK visualization.
+    data = np.transpose(data, (0, 1, 2, 4, 3))
+    data = data[..., :, ::-1, :]
 
-    figure = plt.figure()
     for i in range(data.shape[1]):
-        axis = figure.add_subplot(data.shape[1], 1, i+1, projection='3d')
+        figure = plt.figure(figsize=(2,2))
+        axis = figure.add_subplot(1, 1, 1, projection='3d')
         axis.voxels(data[0, i, ...] > 0, facecolors=np.repeat(data[0, i, ..., None], 3, axis=-1))
         # axis.axis(False)
         axis.set_xticks([])
         axis.set_yticks([])
         axis.set_zticks([])
-        axis.set_title(f"Channel {i+1}", fontsize=8)
 
-        if i == data.shape[1]:
-            plt.colorbar()
+        plt.subplots_adjust(left=0, right=1, bottom=0, top=1, wspace=0)
+        plt.savefig(f'matrix_{i+1}.png')
 
-    plt.subplots_adjust(left=0, right=1, wspace=0)
     plt.show()
 
 def visualize_struts():
@@ -169,8 +172,8 @@ def visualize_struts():
     )
     visualize_actors(actor, gui=True)
 
-def visualize_unique_struts():
-    """Show the 13 unique struts extending from each node."""
+def visualize_unique_struts(channel: int=None):
+    """Show the 13 unique struts extending from each node. If `channel` is provided, use a different color for the strut for the corresponding channel."""
 
     actor = make_actor_lattice(
         locations_1=[(0, 0, 0)]*len(DIRECTIONS),
@@ -178,7 +181,18 @@ def visualize_unique_struts():
         diameters=[0.25]*len(DIRECTIONS),
         resolution=100,
     )
-    visualize_actors(actor, gui=True)
+
+    if channel is not None:
+        actor_highlight = make_actor_lattice(
+            locations_1=[(0, 0, 0)],
+            locations_2=[DIRECTIONS[channel]],
+            diameters=[0.25],
+            resolution=100,
+        )
+        actor_highlight.GetProperty().SetColor(0/255, 191/255, 96/255)
+        visualize_actors(actor, actor_highlight, gui=False, screenshot_filename=f'strut_{channel+1}.png')
+    else:
+        visualize_actors(actor, gui=True)
 
 def plot_data_augmentation():
     """Show a relative density matrix rotated 24 ways."""
@@ -214,4 +228,4 @@ def plot_clipping():
 
 
 if __name__ == '__main__':
-    plot_clipping()
+    visualize_unique_struts()

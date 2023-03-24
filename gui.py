@@ -479,7 +479,7 @@ class InferenceWindow(QMainWindow):
         self.field_screenshot_filename = QLineEdit('screenshot.png')
         layout.addRow('Filename', self.field_screenshot_filename)
 
-        self.field_screenshot_scale = QDoubleSpinBox()
+        self.field_screenshot_scale = QSpinBox()
         self.field_screenshot_scale.setValue(2)
         layout.addRow('Scale', self.field_screenshot_scale)
 
@@ -501,18 +501,9 @@ class InferenceWindow(QMainWindow):
         return widget
 
     def save_screenshot(self):
+        filename = os.path.join('Screenshots', f'{self.field_screenshot_filename.text()}')
         scale = self.field_screenshot_scale.value()
-
-        filter = vtk.vtkWindowToImageFilter()
-        filter.SetInput(self.renwin)
-        filter.SetScale(scale)
-        filter.SetInputBufferTypeToRGB()
-        filter.Update()
-
-        writer = vtk.vtkPNGWriter()
-        writer.SetFileName(os.path.join('Screenshots', f'{self.field_screenshot_filename.text()}'))
-        writer.SetInputConnection(filter.GetOutputPort())
-        writer.Write()
+        save_screenshot(self.renwin, filename, scale)
 
     def generate_lattice(self) -> None:
         self.dataset = LatticeInferenceDataset(

@@ -239,8 +239,22 @@ def export_stl(actor: vtk.vtkActor, filename: str) -> None:
     writer.SetInputData(actor.GetMapper().GetInput())
     writer.Write()
 
-def visualize_actors(*actors, gui: bool=False):
-    """Show an interactive visualization window or a GUI of the given actor(s)."""
+def save_screenshot(window, filename: str, scale: int=1) -> None:
+    """Save a screenshot of the given window."""
+
+    filter = vtk.vtkWindowToImageFilter()
+    filter.SetInput(window)
+    filter.SetScale(scale)
+    filter.SetInputBufferTypeToRGB()
+    filter.Update()
+
+    writer = vtk.vtkPNGWriter()
+    writer.SetFileName(filename)
+    writer.SetInputConnection(filter.GetOutputPort())
+    writer.Write()
+
+def visualize_actors(*actors, gui: bool=False, screenshot_filename: str=None):
+    """Show an interactive visualization window or a GUI of the given actor(s). If not using the GUI, save a screenshot of the window to the given filename."""
 
     if gui:
         application = QApplication(sys.argv)
@@ -284,6 +298,9 @@ def visualize_actors(*actors, gui: bool=False):
         iren.Initialize()
         window.Render()
         iren.Start()
+
+        if screenshot_filename is not None:
+            save_screenshot(window, screenshot_filename, scale=1)
 
 
 if __name__ == "__main__":
