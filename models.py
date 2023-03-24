@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import *
 
 import numpy as np
 import torch
@@ -276,11 +276,11 @@ class TwoBranch(Module):
         # )
 
         self.branch_2 = Sequential(
-            Conv3d(1, 1, 5, 1, 'same'),
+            Conv3d(1, 1, 3, 1, 'same'),
         )
 
         self.convolution_1 = Sequential(
-            Conv3d(1, 4, 5, 1, 'same'),
+            Conv3d(1, 4, 3, 1, 'same'),
             BatchNorm3d(4),
             ReLU(inplace=True),
         )
@@ -312,100 +312,175 @@ class TwoBranch(Module):
         x = torch.clip(x, 0, 100)
         return x
 
-class ResNetMasked(Module):
-    """Variant of ResNet that only sends two locations in the input tensor into the fully-connected layer."""
+class ThirteenBranch(Module):
+    def __init__(self) -> None:
+        super().__init__()
 
+        self.branch_1 = Sequential(Conv3d(2, 1, 5, 1, padding='same'))
+        self.branch_2 = Sequential(Conv3d(2, 1, 5, 1, padding='same'))
+        self.branch_3 = Sequential(Conv3d(2, 1, 5, 1, padding='same'))
+        self.branch_4 = Sequential(Conv3d(2, 1, 5, 1, padding='same'))
+        self.branch_5 = Sequential(Conv3d(2, 1, 5, 1, padding='same'))
+        self.branch_6 = Sequential(Conv3d(2, 1, 5, 1, padding='same'))
+        self.branch_7 = Sequential(Conv3d(2, 1, 5, 1, padding='same'))
+        self.branch_8 = Sequential(Conv3d(2, 1, 5, 1, padding='same'))
+        self.branch_9 = Sequential(Conv3d(2, 1, 5, 1, padding='same'))
+        self.branch_10 = Sequential(Conv3d(2, 1, 5, 1, padding='same'))
+        self.branch_11 = Sequential(Conv3d(2, 1, 5, 1, padding='same'))
+        self.branch_12 = Sequential(Conv3d(2, 1, 5, 1, padding='same'))
+        self.branch_13 = Sequential(Conv3d(2, 1, 5, 1, padding='same'))
+    
+    def forward(self, x):
+        x1 = self.branch_1(x)
+        x2 = self.branch_2(x)
+        x3 = self.branch_3(x)
+        x4 = self.branch_4(x)
+        x5 = self.branch_5(x)
+        x6 = self.branch_6(x)
+        x7 = self.branch_7(x)
+        x8 = self.branch_8(x)
+        x9 = self.branch_9(x)
+        x10 = self.branch_10(x)
+        x11 = self.branch_11(x)
+        x12 = self.branch_12(x)
+        x13 = self.branch_13(x)
+        x = torch.cat([x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13], dim=1)
+        x = torch.clip(x, 0, 100)
+        return x
+
+class DenseLatticeNet(Module):
     def __init__(self) -> None:
         super().__init__()
 
         input_channels = 2
-
-        # Number of output channels in the first layer.
+        output_channels = 13
         c = 4
 
         self.convolution_1 = Sequential(
-            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+            Conv3d(input_channels, c*1, kernel_size=1, stride=1, padding='same'),
             BatchNorm3d(c*1),
             ReLU(inplace=True),
         )
         self.convolution_2 = Sequential(
-            Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-            BatchNorm3d(c*1),
+            Conv3d(c*1+input_channels, c*2, kernel_size=1, stride=1, padding='same'),
+            BatchNorm3d(c*2),
             ReLU(inplace=True),
         )
         self.convolution_3 = Sequential(
-            Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-            BatchNorm3d(c*1),
+            Conv3d(c*2+input_channels, output_channels, kernel_size=1, stride=1, padding='same'),
+            BatchNorm3d(output_channels),
             ReLU(inplace=True),
         )
-        self.convolution_4 = Sequential(
-            Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-            BatchNorm3d(c*1),
-            ReLU(inplace=True),
-        )
-        self.convolution_5 = Sequential(
-            Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-            BatchNorm3d(c*1),
-            ReLU(inplace=True),
-        )
-
         self.residual_1 = residual(c*1, c*1)
-        self.residual_2 = residual(c*1, c*1)
-        self.residual_3 = residual(c*1, c*1)
-        self.residual_4 = residual(c*1, c*1)
-        self.residual_5 = residual(c*1, c*1)
-
-        self.linear = Linear(in_features=c*1, out_features=1)
-
-    def forward(self, x, coordinates):
-        batch_size = x.size(0)
-
-        x = self.convolution_1(x)
-        x = torch.relu(x + self.residual_1(x))
-        x = self.convolution_2(x)
-        x = torch.relu(x + self.residual_2(x))
-        x = self.convolution_3(x)
-        x = torch.relu(x + self.residual_3(x))
-        x = self.convolution_4(x)
-        x = torch.relu(x + self.residual_4(x))
-        x = self.convolution_5(x)
-        x = torch.relu(x + self.residual_5(x))
-
-        (x1, y1, z1), (x2, y2, z2) = coordinates
-        batch_indices = torch.arange(batch_size)
-        # Take the average of two voxels in each channel.
-        x = (x[batch_indices, :, x1, y1, z1] + x[batch_indices, :, x2, y2, z2]) / 2
-        # x = torch.mean([
-        #     x[batch_indices, :, x1, y1, z1],
-        #     x[batch_indices, :, x2, y2, z2],
-        # ], dim=0)
-        x = self.linear(x.view(batch_size, -1))
-
-        return x
-
-class MLP(Module):
-    def __init__(self) -> None:
-        super().__init__()
-
-        self.linear = Sequential(
-            Linear(11**3, 16),
-            ReLU(inplace=True),
-            Linear(16, 8),
-            ReLU(inplace=True),
-            Linear(8, 1),
-        )
-
-        # Initialize weights that linearly decrease away from the center of the volume.
-        coordinates = np.indices((11, 11, 11)) - 5
-        coordinates = np.sqrt(np.sum((coordinates ** 2), axis=0))
-        coordinates = 1 - (coordinates / coordinates.max())
-        coordinates *= 0.1
-        with torch.no_grad():
-            self.linear.get_parameter('0.weight')[:] = torch.tensor(coordinates[..., 1].flatten()[None, 1], requires_grad=True)
+        self.residual_2 = residual(c*2, c*2)
+        self.residual_3 = residual(output_channels, output_channels)
     
     def forward(self, x):
-        x = self.linear(x.view(x.size(0), -1))
+        x_original = x
+        x = self.convolution_1(x)
+        x = torch.relu(x + self.residual_1(x))
+        x = self.convolution_2(torch.cat([x_original, x], dim=1))
+        x = torch.relu(x + self.residual_2(x))
+        x = self.convolution_3(torch.cat([x_original, x], dim=1))
+        x = torch.relu(x + self.residual_3(x))
+        x = torch.clip(x, 0, 100)
+
         return x
+
+# class ResNetMasked(Module):
+#     """Variant of ResNet that only sends two locations in the input tensor into the fully-connected layer."""
+
+#     def __init__(self) -> None:
+#         super().__init__()
+
+#         input_channels = 2
+
+#         # Number of output channels in the first layer.
+#         c = 4
+
+#         self.convolution_1 = Sequential(
+#             Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+#             BatchNorm3d(c*1),
+#             ReLU(inplace=True),
+#         )
+#         self.convolution_2 = Sequential(
+#             Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+#             BatchNorm3d(c*1),
+#             ReLU(inplace=True),
+#         )
+#         self.convolution_3 = Sequential(
+#             Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+#             BatchNorm3d(c*1),
+#             ReLU(inplace=True),
+#         )
+#         self.convolution_4 = Sequential(
+#             Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+#             BatchNorm3d(c*1),
+#             ReLU(inplace=True),
+#         )
+#         self.convolution_5 = Sequential(
+#             Conv3d(in_channels=c*1, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+#             BatchNorm3d(c*1),
+#             ReLU(inplace=True),
+#         )
+
+#         self.residual_1 = residual(c*1, c*1)
+#         self.residual_2 = residual(c*1, c*1)
+#         self.residual_3 = residual(c*1, c*1)
+#         self.residual_4 = residual(c*1, c*1)
+#         self.residual_5 = residual(c*1, c*1)
+
+#         self.linear = Linear(in_features=c*1, out_features=1)
+
+#     def forward(self, x, coordinates):
+#         batch_size = x.size(0)
+
+#         x = self.convolution_1(x)
+#         x = torch.relu(x + self.residual_1(x))
+#         x = self.convolution_2(x)
+#         x = torch.relu(x + self.residual_2(x))
+#         x = self.convolution_3(x)
+#         x = torch.relu(x + self.residual_3(x))
+#         x = self.convolution_4(x)
+#         x = torch.relu(x + self.residual_4(x))
+#         x = self.convolution_5(x)
+#         x = torch.relu(x + self.residual_5(x))
+
+#         (x1, y1, z1), (x2, y2, z2) = coordinates
+#         batch_indices = torch.arange(batch_size)
+#         # Take the average of two voxels in each channel.
+#         x = (x[batch_indices, :, x1, y1, z1] + x[batch_indices, :, x2, y2, z2]) / 2
+#         # x = torch.mean([
+#         #     x[batch_indices, :, x1, y1, z1],
+#         #     x[batch_indices, :, x2, y2, z2],
+#         # ], dim=0)
+#         x = self.linear(x.view(batch_size, -1))
+
+#         return x
+
+# class MLP(Module):
+#     def __init__(self) -> None:
+#         super().__init__()
+
+#         self.linear = Sequential(
+#             Linear(11**3, 16),
+#             ReLU(inplace=True),
+#             Linear(16, 8),
+#             ReLU(inplace=True),
+#             Linear(8, 1),
+#         )
+
+#         # Initialize weights that linearly decrease away from the center of the volume.
+#         coordinates = np.indices((11, 11, 11)) - 5
+#         coordinates = np.sqrt(np.sum((coordinates ** 2), axis=0))
+#         coordinates = 1 - (coordinates / coordinates.max())
+#         coordinates *= 0.1
+#         with torch.no_grad():
+#             self.linear.get_parameter('0.weight')[:] = torch.tensor(coordinates[..., 1].flatten()[None, 1], requires_grad=True)
+    
+#     def forward(self, x):
+#         x = self.linear(x.view(x.size(0), -1))
+#         return x
 
 # class Gnn(torch.nn.Module):
 #     """GNN whose input is a graph of node densities and coordinates and whose output is a 2D tensor of strut diameters with shape (number of struts, 1)."""
@@ -495,195 +570,3 @@ class MLP(Module):
     
 #     def forward(self, density, edge_index):
 #         x = self.convolution_1(density)
-
-
-class Autoencoder1(torch.nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-
-        input_channels = 2
-        c = 4
-
-        self.convolution_1 = Sequential(
-            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
-            BatchNorm3d(num_features=c*1),
-            ReLU(inplace=True),
-        )
-        self.convolution_2 = Sequential(
-            Conv3d(in_channels=c*1, out_channels=c*2, kernel_size=3, stride=1, padding='same'),
-            BatchNorm3d(num_features=c*2),
-            ReLU(inplace=True),
-        )
-        self.convolution_3 = Sequential(
-            Conv3d(in_channels=c*2, out_channels=c*4, kernel_size=3, stride=1, padding='same'),
-            BatchNorm3d(num_features=c*4),
-            ReLU(inplace=True),
-        )
-
-        self.deconvolution_1 = Sequential(
-            ConvTranspose3d(in_channels=c*4, out_channels=c*2, kernel_size=3, stride=1, padding=1),
-            BatchNorm3d(num_features=c*2),
-            ReLU(inplace=True),
-        )
-        self.deconvolution_2 = Sequential(
-            ConvTranspose3d(in_channels=c*2, out_channels=c*1, kernel_size=3, stride=1, padding=1),
-            BatchNorm3d(num_features=c*1),
-            ReLU(inplace=True),
-        )
-        self.deconvolution_3 = Sequential(
-            ConvTranspose3d(in_channels=c*1, out_channels=input_channels, kernel_size=3, stride=1, padding=1),
-        )
-    
-    def forward(self, x):
-        x = self.convolution_1(x)
-        x = self.convolution_2(x)
-        x = self.convolution_3(x)
-        x = self.deconvolution_1(x)
-        x = self.deconvolution_2(x)
-        x = self.deconvolution_3(x)
-        return x
-
-class Autoencoder2(torch.nn.Module):
-    """Downsampling"""
-
-    def __init__(self) -> None:
-        super().__init__()
-
-        input_channels = 2
-        c = 32
-
-        self.convolution_1 = Sequential(
-            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=2, padding=1),
-            BatchNorm3d(num_features=c*1),
-            ReLU(inplace=True),
-        )
-        self.convolution_2 = Sequential(
-            Conv3d(in_channels=c*1, out_channels=c*2, kernel_size=3, stride=2, padding=1),
-            BatchNorm3d(num_features=c*2),
-            ReLU(inplace=True),
-        )
-        self.convolution_3 = Sequential(
-            Conv3d(in_channels=c*2, out_channels=c*4, kernel_size=3, stride=2, padding=1),
-            BatchNorm3d(num_features=c*4),
-            ReLU(inplace=True),
-        )
-
-        self.deconvolution_1 = Sequential(
-            ConvTranspose3d(in_channels=c*4, out_channels=c*2, kernel_size=3, stride=2, padding=1, output_padding=0),
-            BatchNorm3d(num_features=c*2),
-            ReLU(inplace=True),
-        )
-        self.deconvolution_2 = Sequential(
-            ConvTranspose3d(in_channels=c*2, out_channels=c*1, kernel_size=3, stride=2, padding=1, output_padding=1),
-            BatchNorm3d(num_features=c*1),
-            ReLU(inplace=True),
-        )
-        self.deconvolution_3 = Sequential(
-            ConvTranspose3d(in_channels=c*1, out_channels=input_channels, kernel_size=3, stride=2, padding=1, output_padding=0),
-        )
-    
-    def forward(self, x):
-        x = self.convolution_1(x)
-        x = self.convolution_2(x)
-        x = self.convolution_3(x)
-        x = self.deconvolution_1(x)
-        x = self.deconvolution_2(x)
-        x = self.deconvolution_3(x)
-        return x
-
-class Autoencoder3(torch.nn.Module):
-    """1 conv layer"""
-
-    def __init__(self) -> None:
-        super().__init__()
-
-        self.convolution_1 = Sequential(
-            Conv3d(in_channels=2, out_channels=13, kernel_size=11, stride=1, padding='same'),
-            BatchNorm3d(13),
-            ReLU(),
-        )
-        self.deconvolution_1 = ConvTranspose3d(13, 2, kernel_size=11, stride=1, padding=5)
-    
-    def forward(self, x):
-        x = self.convolution_1(x)
-        x = self.deconvolution_1(x)
-        return x
-
-class Autoencoder4(torch.nn.Module):
-    """1x1 conv"""
-
-    def __init__(self) -> None:
-        super().__init__()
-
-        input_channels = 2
-        c = 32
-
-        self.convolution_1 = Sequential(
-            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=1, stride=1, padding=0),
-            BatchNorm3d(num_features=c*1),
-            ReLU(inplace=True),
-        )
-        self.convolution_2 = Sequential(
-            Conv3d(in_channels=c*1, out_channels=c*2, kernel_size=1, stride=1, padding=0),
-            BatchNorm3d(num_features=c*2),
-            ReLU(inplace=True),
-        )
-        self.convolution_3 = Sequential(
-            Conv3d(in_channels=c*2, out_channels=c*4, kernel_size=1, stride=1, padding=0),
-            BatchNorm3d(num_features=c*4),
-            ReLU(inplace=True),
-        )
-
-        self.deconvolution_1 = Sequential(
-            ConvTranspose3d(in_channels=c*4, out_channels=c*2, kernel_size=1, stride=1, padding=0),
-            BatchNorm3d(num_features=c*2),
-            ReLU(inplace=True),
-        )
-        self.deconvolution_2 = Sequential(
-            ConvTranspose3d(in_channels=c*2, out_channels=c*1, kernel_size=1, stride=1, padding=0),
-            BatchNorm3d(num_features=c*1),
-            ReLU(inplace=True),
-        )
-        self.deconvolution_3 = Sequential(
-            ConvTranspose3d(in_channels=c*1, out_channels=input_channels, kernel_size=1, stride=1, padding=0),
-        )
-    
-    def forward(self, x):
-        x = self.convolution_1(x)
-        x = self.convolution_2(x)
-        x = self.convolution_3(x)
-        x = self.deconvolution_1(x)
-        x = self.deconvolution_2(x)
-        x = self.deconvolution_3(x)
-        return x
-
-class Autoencoder5(torch.nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-
-        input_channels = 2
-        c = 4
-
-        self.conv_1 = Conv3d(input_channels, c*1, 1, 1, 0)
-        self.res_1 = residual(c*1, c*1)
-        self.res_2 = residual(c*1, c*1)
-        self.conv_2 = Conv3d(c*1, c*2, 1, 1, 0)
-        self.res_3 = residual(c*2, c*2)
-        self.res_4 = residual(c*2, c*2)
-        self.conv_3 = Conv3d(c*2, c*1, 1, 1, 0)
-        self.res_5 = residual(c*1, c*1)
-        self.res_6 = residual(c*1, c*1)
-        self.conv_4 = Conv3d(c*1, input_channels, 1, 1, 0)
-
-    def forward(self, x):
-        x = self.conv_1(x)
-        x = torch.relu(x + self.res_1(x))
-        x = torch.relu(x + self.res_2(x))
-        x = self.conv_2(x)
-        x = torch.relu(x + self.res_3(x))
-        x = torch.relu(x + self.res_4(x))
-        x = self.conv_3(x)
-        x = torch.relu(x + self.res_5(x))
-        x = torch.relu(x + self.res_6(x))
-        x = self.conv_4(x)
-        return x

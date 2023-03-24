@@ -402,26 +402,6 @@ def main(
         lengths=[int(split * len(dataset)) for split in data_split],
         generator=torch.Generator().manual_seed(42),
     )
-    # train_size, validate_size, test_size = [int(split * dataset.inputs.size(0)) for split in data_split]
-    # train_image_indices = image_indices[:train_size]
-    # validate_image_indices = image_indices[train_size:train_size+validate_size]
-    # test_image_indices = image_indices[-test_size:]
-
-    # train_indices = dataset.outputs_for_images(train_image_indices)
-    # validate_indices = dataset.outputs_for_images(validate_image_indices)
-    # test_indices = dataset.outputs_for_images(test_image_indices)
-
-    # train_dataset = Subset(dataset, train_indices)
-    # validate_dataset = Subset(dataset, validate_indices)
-    # test_dataset = Subset(dataset, test_indices)
-
-    # dataset_size = len(dataset)
-    # train_size, validate_size, test_size = [int(split * dataset_size) for split in data_split]
-    # train_dataset, validate_dataset, test_dataset = torch.utils.data.random_split(
-    #     dataset,
-    #     [train_size, validate_size, test_size],
-    #     generator=torch.Generator().manual_seed(42),
-    # )
 
     print(f"\nSplit {len(dataset):,} samples into {len(train_dataset):,} training / {len(validate_dataset):,} validation / {len(test_dataset):,} testing.")
 
@@ -515,57 +495,6 @@ def main(
                 actor_label = make_actor_lattice(*convert_array_to_lattice(labels[i, ...]), translation=(12, 0, 0))
                 visualize_actors(actor_output, actor_label, gui=False)
 
-            # # Visualize autoencoder predictions.
-            # i = 1
-            # outputs *= dataset.input_std.item()
-            # outputs += dataset.input_mean.item()
-            # labels *= dataset.input_std.item()
-            # labels += dataset.input_mean.item()
-            # print(outputs.min(), outputs.max(), labels.min(), labels.max())
-            # output = np.concatenate([outputs[i, 0, ...], np.zeros((1, 11, 11)), outputs[i, 1, ...]], axis=0)
-            # label = np.concatenate([labels[i, 0, ...], np.zeros((1, 11, 11)), labels[i, 1, ...]], axis=0)
-            # visualize_input(np.concatenate([output, np.zeros((11+1+11, 1, 11)), label], axis=1) * 255, hide_zeros=True)
-
-            # # If predicting local strut diameters, visualize the predictions on all struts in a single lattice structure.
-            # dataset.p = 1.0
-            # indices = dataset.outputs_for_images([test_image_indices[0]])
-            # loader = DataLoader(Subset(dataset, indices), batch_size=1, shuffle=False)
-            # outputs, labels, inputs = test(
-            #     device = device,
-            #     model = model,
-            #     loss_function = loss_function,
-            #     test_dataloader = loader,
-            #     queue = queue,
-            #     queue_to_main = queue_to_main,
-            #     info_gui = info_gui,
-            # )
-
-            # # Calculate (x, y, z) coordinates of each node.
-            # locations_1 = []
-            # locations_2 = []
-            # for input_ in inputs:
-            #     coordinates = np.argwhere(input_[0, 1, ...])
-            #     assert coordinates.shape[0] == 2
-            #     locations_1.append(tuple(coordinates[0, :]))
-            #     locations_2.append(tuple(coordinates[1, :]))
-
-            # visualize_lattice(locations_1, locations_2, outputs) #, true_diameters=labels)
-            # visualize_lattice(locations_1, locations_2, labels)
-
-
-            # graph = copy.deepcopy(test_dataset[0])
-            # i = 1527
-            # graph.edge_attr = outputs[:i, :]
-            # graph.y = graph.y[:i, :]
-
-            # i = 3
-
-            # graph = test_dataset[i]
-            # graph.edge_attr = outputs[i]
-            # graph.y = labels[i]
-            # lattice = convert_graph_to_lattice(graph)
-            # visualize_lattice(*lattice, [_.item() for _ in graph.y])
-
 
 if __name__ == "__main__":
     # class WeightedMSE(nn.Module):
@@ -604,18 +533,18 @@ if __name__ == "__main__":
         "test_model": True,
         "visualize_results": True,
 
-        "train_existing": not True,
-        "filename_model": "two_branch.pth",
+        "train_existing": True,
+        "filename_model": "dense.pth",
         "save_model_every": 10,
 
         "epoch_count": 10,
-        "learning_rate": 1e-3,
+        "learning_rate": 1e-5,
         "decay_learning_rate": False,
         "batch_sizes": (64, 64, 64),
         "data_split": (0.8, 0.1, 0.1),
         
         "dataset": LatticeDataset(normalize_inputs=True),
-        "model": TwoBranch(), #LatticeNet(output_max=LatticeDataset.DIAMETER_SCALE),
+        "model": DenseLatticeNet(), #LatticeNet(output_max=LatticeDataset.DIAMETER_SCALE),
         # "dataset": AutoencoderDataset(),
         # "model": Autoencoder5(),
         "Optimizer": torch.optim.Adam,
@@ -682,37 +611,13 @@ MAE (nonzero): 0.0516
 MRE (nonzero): 9.6341
 Min error: -1.0000
 Max error: 0.4489
-"""
 
-
-"""
-Autoencoder 1 (50 epochs, not converged):
-Testing loss: 1.82e-02
-Mean Error: -0.0021
-MAE: 0.1018
-MAE (nonzero): 0.1108
-MRE (nonzero): 14.1897
-Min error: -0.9737
-Max error: 0.9556
-
-Autoencoder 2 (50 epochs, c=32)
-Testing loss: 9.37e-02
-Mean Error: -0.0091
-MAE: 0.1759
-MAE (nonzero): 0.1857
-MRE (nonzero): 20.6569
-Min error: -2.7697
-Max error: 2.7902
-
-Autoencoder 3 (50 epochs):
-Testing loss: 2.65e-02
-Mean Error: -0.0336
-MAE: 0.1243
-MAE (nonzero): 0.1316
-MRE (nonzero): 15.8180
-Min error: -1.6666
-Max error: 0.8866
-
-Autoencoder 4 (50 epochs):
-
+DenseLatticeNet (2023-03-16, 60 epochs):
+Testing loss: 2.35e+00
+Mean Error: -0.0004
+MAE: 0.0021
+MAE (nonzero): 0.0285
+MRE (nonzero): 5.7346
+Min error: -1.0000
+Max error: 1.0000
 """

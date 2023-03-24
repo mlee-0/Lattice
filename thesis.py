@@ -200,6 +200,18 @@ def plot_data_augmentation():
     plt.subplots_adjust(bottom=0.1, top=0.9)
     plt.show()
 
+def plot_clipping():
+    """Plot showing how LatticeNet clips output data to [0, 100]."""
+
+    x = np.linspace(-100, 200, 100)
+    plt.figure()
+    plt.plot(x, np.clip(x, 0, 100))
+    plt.xticks([0, 100])
+    plt.yticks([0, 100])
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.show()
+
+
 if __name__ == '__main__':
-    # visualize_output_by_channel(0)
-    plot_output()
+    plot_clipping()
