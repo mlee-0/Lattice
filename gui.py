@@ -22,7 +22,6 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor  # type
 import main
 from models import *
 from datasets import *
-from visualization import *
 
 
 class TrainingWindow(QMainWindow):
@@ -435,13 +434,6 @@ class InferenceWindow(QMainWindow):
         self.field_model = QLineEdit('model.pth')
         layout.addRow('Model', self.field_model)
 
-        # self.field_batch_size = QSpinBox()
-        # self.field_batch_size.setRange(1, 1000)
-        # layout.addRow('Batch size', self.field_batch_size)
-
-        # self.checkbox_screenshot = QCheckBox('Screenshot each batch')
-        # layout.addRow(self.checkbox_screenshot)
-
         # Fields related to the camera.
         box = QGroupBox('Camera')
         layout = QFormLayout(box)
@@ -501,6 +493,8 @@ class InferenceWindow(QMainWindow):
         return widget
 
     def save_screenshot(self):
+        from visualization import save_screenshot
+
         filename = os.path.join('Screenshots', f'{self.field_screenshot_filename.text()}')
         scale = self.field_screenshot_scale.value()
         save_screenshot(self.renwin, filename, scale)
@@ -542,72 +536,6 @@ class InferenceWindow(QMainWindow):
         actor = make_actor_lattice(locations_1, locations_2, diameters, resolution=3)
         self.set_actor(actor)
         self.reset()
-        
-        self.iren.Render()
-
-    def generate_strut(self) -> None:
-        """Generate and show one batch of data."""
-
-        # Load the dataset.
-        if self.dataset is None:
-            self.dataset = StrutInferenceDataset(
-                density_shape=(
-                    self.field_density_height.value(),
-                    self.field_density_width.value(),
-                    self.field_density_depth.value(),
-                ),
-                density_function=self.field_density_function.currentText(),
-                lattice_shape=(
-                    self.field_lattice_height.value(),
-                    self.field_lattice_width.value(),
-                    self.field_lattice_depth.value(),
-                ),
-                lattice_type=self.field_lattice_type.currentText(),
-            )
-
-            self.generator = main.infer_strut(
-                model=StrutNet(),
-                filename_model=self.field_model.text(),
-                dataset=self.dataset,
-                batch_size=self.field_batch_size.value(),
-            )
-
-        # Generate the next batch.
-        try:
-            tic = time.time()
-            locations_1, locations_2, diameters = next(self.generator)
-            toc = time.time()
-
-            # Scale to exaggerate contrast.
-            diameters = torch.tensor(diameters)
-            print(diameters.min(), diameters.max())
-            diameters -= diameters.min()
-            print(diameters.min(), diameters.max())
-            diameters /= diameters.max()
-            print(diameters.min(), diameters.max())
-            diameters = diameters * 0.1 + 0.2  # [0.2, 0.3]
-            print(diameters.min(), diameters.max())
-            # Offset to align with origin.
-            for c1, c2, d in zip(locations_1, locations_2, diameters):
-                print(np.array(c1) - [13, 20, 13], np.array(c2) - [13, 20, 13], round(d.item(), 3))
-
-        except StopIteration:
-            self.button_generate.setEnabled(False)
-        else:
-            self.batch += 1
-            actor = make_actor_lattice(locations_1, locations_2, diameters, resolution=20)
-            self.set_actor(actor)
-
-            if self.batch == 0:
-                self.reset()
-            self.label_runtime.setText(f"Generated in {toc - tic:.2f} s; total {len(self.dataset)} struts")
-        
-        # Show density.
-        # actor_density = make_actor_input((self.dataset.density * 41.9801) + 127.4493)
-        # self.set_actor(actor_density)
-
-        if self.checkbox_screenshot.isChecked():
-            self.save_screenshot()
         
         self.iren.Render()
 

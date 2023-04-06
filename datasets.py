@@ -290,6 +290,56 @@ class AutoencoderDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         return self.inputs[index, ...], self.inputs[index, ...]
 
+class FemurDataset(torch.utils.data.Dataset):
+    """Relative density data in the shape of a femur, model from: https://link.springer.com/article/10.1007/s10237-015-0740-7"""
+
+    def __init__(self, normalize_inputs: bool=True) -> None:
+        super().__init__()
+
+        shape = (30, 30, 100)
+
+        channel_1 = read_pickle('Training_Data_50/inputs.pickle').float()[:1, :1, :shape[0], :shape[1], :shape[2]]
+        channel_1 /= channel_1.max()
+        # Enlarge in each dimension by repeating values to match `shape`.
+        if channel_1.shape[2] < shape[0]:
+            channel_1 = np.repeat(channel_1, np.ceil(shape[0]/channel_1.shape[2]), axis=2)
+        if channel_1.shape[3] < shape[1]:
+            channel_1 = np.repeat(channel_1, np.ceil(shape[1]/channel_1.shape[3]), axis=3)
+        if channel_1.shape[4] < shape[2]:
+            channel_1 = np.repeat(channel_1, np.ceil(shape[2]/channel_1.shape[4]), axis=4)
+        # Index to match `shape`.
+        channel_1 = channel_1[..., :shape[0], :shape[1], :shape[2]]
+
+        channel_2 = np.zeros((1, 1, *shape))
+
+        with open('Geraldes2015orthotropicfemurmodel.txt', 'r') as f:
+            lines = f.readlines()[12:]
+
+        x, y, z = zip(*[[float(_.strip()) for _ in line.split(',')[1:]] for line in lines])
+        x, y, z = np.array(x), np.array(y), np.array(z)
+        # Scale all coordinates within the bounds defined by `shape`.
+        x -= x.min()
+        y -= y.min()
+        z -= z.min()
+        maximum_coordinate = np.max(np.concatenate([x, y, z]))
+        x = np.round((x / maximum_coordinate) * (max(shape) - 1)).astype(int)
+        y = np.round((y / maximum_coordinate) * (max(shape) - 1)).astype(int)
+        z = np.round((z / maximum_coordinate) * (max(shape) - 1)).astype(int)
+
+        for x_, y_, z_ in zip(x, y, z):
+            channel_2[..., x_, y_, z_] = 1
+        channel_2 = channel_2 * 2 - 1
+        
+        self.inputs = np.concatenate([channel_1, channel_2], axis=1)
+        self.inputs = torch.tensor(self.inputs).float()
+        # Normalize input data.
+        if normalize_inputs:
+            self.inputs -= -0.14252009987831116
+            self.inputs /= 0.7857609987258911
+
+    def __getitem__(self, index):
+        return self.inputs[index, ...]
+
 class LatticeInferenceDataset(torch.utils.data.Dataset):
     """A dataset for testing the network on custom-generated density."""
 
@@ -396,5 +446,8 @@ class StrutInferenceDataset(torch.utils.data.Dataset):
 
 
 if __name__ == '__main__':
-    # dataset = InferenceDataset('circle')
-    dataset = LatticeDataset(True)
+    dataset = FemurDataset(normalize_inputs=False)
+    array = dataset.inputs[0, 0] * 255
+    # array = (dataset.inputs[0, 1] + 1) / 2 * 255
+    actor = make_actor_density(array, hide_zeros=not True)
+    visualize_actors(actor, gui=True)

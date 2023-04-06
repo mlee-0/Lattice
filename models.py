@@ -86,94 +86,43 @@ class StrutNet(Module):
         return x
 
 class LatticeNet(Module):
-    """3D ResNet whose input is a 3D array of densities and whose output is an array of diameters throughout the volume."""
+    """3D CNN whose input is a 3D array of densities and whose output is an array of diameters throughout the volume."""
 
-    def __init__(self, output_max: float) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self.output_max = output_max
 
         input_channels = 2
         output_channels = 13
-
-        # Number of output channels in the first layer.
         c = 4
 
-        # self.layers = Sequential(
-        #     Conv3d(input_channels, 3, 3, 1, 'same'),
-        #     BatchNorm3d(3),
-        #     ReLU(inplace=True),
-        #     Conv3d(3, 5, 3, 1, 'same'),
-        #     BatchNorm3d(5),
-        #     ReLU(inplace=True),
-        #     Conv3d(5, 7, 3, 1, 'same'),
-        #     BatchNorm3d(7),
-        #     ReLU(inplace=True),
-        #     Conv3d(7, 9, 3, 1, 'same'),
-        #     BatchNorm3d(9),
-        #     ReLU(inplace=True),
-        #     Conv3d(9, 11, 3, 1, 'same'),
-        #     BatchNorm3d(11),
-        #     ReLU(inplace=True),
-        #     Conv3d(11, 13, 3, 1, 'same'),
-        # )
-
-        self.convolution_initial = Sequential(
-            Conv3d(in_channels=input_channels, out_channels=c*1, kernel_size=3, stride=1, padding='same'),
+        self.convolution_1 = Sequential(
+            Conv3d(input_channels, c*1, kernel_size=1, stride=1, padding='same'),
             BatchNorm3d(c*1),
             ReLU(inplace=True),
         )
-
+        self.convolution_2 = Sequential(
+            Conv3d(c*1+input_channels, c*2, kernel_size=1, stride=1, padding='same'),
+            BatchNorm3d(c*2),
+            ReLU(inplace=True),
+        )
+        self.convolution_3 = Sequential(
+            Conv3d(c*2+input_channels, output_channels, kernel_size=1, stride=1, padding='same'),
+            BatchNorm3d(output_channels),
+            ReLU(inplace=True),
+        )
         self.residual_1 = residual(c*1, c*1)
-        self.residual_2 = residual(c*1, c*1)
-        self.residual_3 = residual(c*1, c*2)
-        self.residual_4 = residual(c*2, c*2)
-        self.residual_5 = residual(c*2, c*4)
-        self.residual_6 = residual(c*4, c*4)
-        self.residual_7 = residual(c*4, c*8)
-        self.residual_8 = residual(c*8, c*8)
-        # self.residual_9 = residual(c*8, c*8)
-        # self.residual_10 = residual(c*8, c*8)
-        # self.residual_11 = residual(c*8, c*8)
-        # self.residual_12 = residual(c*8, c*8)
-
-        self.convolution_final = Sequential(
-            Conv3d(in_channels=c*8, out_channels=output_channels, kernel_size=1, stride=1, padding='same'),
-        )
-
+        self.residual_2 = residual(c*2, c*2)
+        self.residual_3 = residual(output_channels, output_channels)
+    
     def forward(self, x):
-        # x = self.layers(x)
-        # x = torch.clip(x, 0, self.output_max)
-
-        x = self.convolution_initial(x)
-
+        x_original = x
+        x = self.convolution_1(x)
         x = torch.relu(x + self.residual_1(x))
+        x = self.convolution_2(torch.cat([x_original, x], dim=1))
         x = torch.relu(x + self.residual_2(x))
-
-        residual = self.residual_3(x)
-        x = torch.relu(
-            torch.cat((x, torch.zeros(x.size(0), residual.size(1)-x.size(1), *x.size()[2:])), dim=1) + residual
-        )
-        x = torch.relu(x + self.residual_4(x))
-
-        residual = self.residual_5(x)
-        x = torch.relu(
-            torch.cat((x, torch.zeros(x.size(0), residual.size(1)-x.size(1), *x.size()[2:])), dim=1) + residual
-        )
-        x = torch.relu(x + self.residual_6(x))
-
-        residual = self.residual_7(x)
-        x = torch.relu(
-            torch.cat((x, torch.zeros(x.size(0), residual.size(1)-x.size(1), *x.size()[2:])), dim=1) + residual
-        )
-        x = torch.relu(x + self.residual_8(x))
-        # x = torch.relu(x + self.residual_9(x))
-        # x = torch.relu(x + self.residual_10(x))
-        # x = torch.relu(x + self.residual_11(x))
-        # x = torch.relu(x + self.residual_12(x))
-
-        x = self.convolution_final(x)
-        # Variant of ReLU in which values are clipped to 0 and the specified maximum.
-        x = torch.clip(x, 0, self.output_max)
+        x = self.convolution_3(torch.cat([x_original, x], dim=1))
+        x = torch.relu(x + self.residual_3(x))
+        x = torch.clip(x, 0, 100)
 
         return x
 
@@ -346,45 +295,6 @@ class ThirteenBranch(Module):
         x13 = self.branch_13(x)
         x = torch.cat([x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13], dim=1)
         x = torch.clip(x, 0, 100)
-        return x
-
-class DenseLatticeNet(Module):
-    def __init__(self) -> None:
-        super().__init__()
-
-        input_channels = 2
-        output_channels = 13
-        c = 4
-
-        self.convolution_1 = Sequential(
-            Conv3d(input_channels, c*1, kernel_size=1, stride=1, padding='same'),
-            BatchNorm3d(c*1),
-            ReLU(inplace=True),
-        )
-        self.convolution_2 = Sequential(
-            Conv3d(c*1+input_channels, c*2, kernel_size=1, stride=1, padding='same'),
-            BatchNorm3d(c*2),
-            ReLU(inplace=True),
-        )
-        self.convolution_3 = Sequential(
-            Conv3d(c*2+input_channels, output_channels, kernel_size=1, stride=1, padding='same'),
-            BatchNorm3d(output_channels),
-            ReLU(inplace=True),
-        )
-        self.residual_1 = residual(c*1, c*1)
-        self.residual_2 = residual(c*2, c*2)
-        self.residual_3 = residual(output_channels, output_channels)
-    
-    def forward(self, x):
-        x_original = x
-        x = self.convolution_1(x)
-        x = torch.relu(x + self.residual_1(x))
-        x = self.convolution_2(torch.cat([x_original, x], dim=1))
-        x = torch.relu(x + self.residual_2(x))
-        x = self.convolution_3(torch.cat([x_original, x], dim=1))
-        x = torch.relu(x + self.residual_3(x))
-        x = torch.clip(x, 0, 100)
-
         return x
 
 # class ResNetMasked(Module):

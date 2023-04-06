@@ -3,6 +3,7 @@
 *.pth
 *.pickle
 *.mat
+*.txt
 
 Training_Data_*
 Checkpoints

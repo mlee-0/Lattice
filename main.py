@@ -346,6 +346,29 @@ def infer_strut(model: nn.Module, filename_model: str, dataset: Dataset, batch_s
         diameters[(i-1)*batch_size:i*batch_size] = diameter.squeeze()
         yield locations_1, locations_2, diameters
 
+def infer_femur():
+    dataset = FemurDataset()
+
+    checkpoint = load_model('Checkpoints/LatticeNet.pth', device='cpu')
+    model = LatticeNet()
+    model.load_state_dict(checkpoint['model_state_dict'])
+    with torch.no_grad():
+        output = model(dataset.inputs[0:1])
+        output = output[0].numpy()
+        output /= 100
+    
+    # Remove invalid struts.
+    for channel, x, y, z in zip(*np.nonzero(output)):
+        dx, dy, dz = DIRECTIONS[channel]
+        try:
+            if dataset.inputs[0, 1, x + dx, y + dy, z + dz] < 0:
+                output[channel, x, y, z] = 0
+        except IndexError:
+            output[channel, x, y, z] = 0
+    
+    actor = make_actor_lattice(*convert_array_to_lattice(output), resolution=3)
+    visualize_actors(actor, gui=True)
+
 def main(
     epoch_count: int, learning_rate: float, decay_learning_rate: bool, batch_sizes: Tuple[int, int, int], data_split: Tuple[float, float, float], dataset: Dataset, model: nn.Module,
     filename_model: str, train_existing: bool, save_model_every: int,
@@ -497,14 +520,6 @@ def main(
 
 
 if __name__ == "__main__":
-    # class WeightedMSE(nn.Module):
-    #     def __init__(self) -> None:
-    #         super().__init__()
-
-    #     def forward(self, output, target):
-    #         weights = (target > 0) + 1
-    #         return torch.mean((output - target) ** 2 * weights)
-
     # Test on 51x51x51
     # labels = read_outputs()
     # labels = convert_outputs_to_array(labels)
@@ -528,96 +543,26 @@ if __name__ == "__main__":
     # visualize_lattice(*convert_array_to_lattice(outputs[0, ...]))
     # # visualize_lattice(*convert_array_to_lattice(labels[0, ...].numpy()))
 
-    kwargs = {
-        "train_model": True,
-        "test_model": True,
-        "visualize_results": True,
+    # main(
+    #     train_model = True,
+    #     test_model = True,
+    #     visualize_results = True,
 
-        "train_existing": True,
-        "filename_model": "dense.pth",
-        "save_model_every": 10,
+    #     train_existing = True,
+    #     filename_model = 'LatticeNet.pth',
+    #     save_model_every = 10,
 
-        "epoch_count": 10,
-        "learning_rate": 1e-5,
-        "decay_learning_rate": False,
-        "batch_sizes": (64, 64, 64),
-        "data_split": (0.8, 0.1, 0.1),
+    #     epoch_count = 10,
+    #     learning_rate = 1e-5,
+    #     decay_learning_rate = False,
+    #     batch_sizes = (64, 64, 64),
+    #     data_split = (0.8, 0.1, 0.1),
         
-        "dataset": LatticeDataset(normalize_inputs=True),
-        "model": DenseLatticeNet(), #LatticeNet(output_max=LatticeDataset.DIAMETER_SCALE),
-        # "dataset": AutoencoderDataset(),
-        # "model": Autoencoder5(),
-        "Optimizer": torch.optim.Adam,
-        "loss_function": nn.MSELoss(),
-    }
-    
-    main(**kwargs)
-
-
-"""
-2 final conv layers:
-Testing loss: 2.89e+00
-Mean Error: -0.0010
-MAE: 0.0026
-MAE (nonzero): 0.0382
-MRE (nonzero): 7.5596
-Min error: -1.0000
-Max error: 0.8653
-
-c = 8 instead of c = 4: interrupted at epoch 7 b/c bad
-Testing loss: 1.81e+01
-Mean Error: -0.0015
-MAE: 0.0053
-MAE (nonzero): 0.0808
-MRE (nonzero): 15.7535
-Min error: -1.0000
-Max error: 1.0000
-
-c = 2 instead of c = 4: not good
-Testing loss: 3.58e+01
-Mean Error: -0.0061
-MAE: 0.0080
-MAE (nonzero): 0.1231
-MRE (nonzero): 23.1958
-Min error: -1.0000
-Max error: 0.6509
-
-U-Net (2023-03-14) (model overwritten):
-Not good b/c of downscaling
-
-No ReLU (2023-03-15):
-Testing loss: 4.41e+00
-Mean Error: 0.0002
-MAE: 0.0029
-MAE (nonzero): 0.0426
-MRE (nonzero): 8.6815
-Min error: -1.0000
-Max error: 0.3261
-
-TwoBranch (2023-03-15):
-Testing loss: 3.41e+00
-Mean Error: -0.0001
-MAE: 0.0029
-MAE (nonzero): 0.0399
-MRE (nonzero): 8.1583
-Min error: -1.0000
-Max error: 0.5803
-
-TwoBranch (2023-03-16):
-Testing loss: 5.17e+00
-Mean Error: -0.0008
-MAE: 0.0049
-MAE (nonzero): 0.0516
-MRE (nonzero): 9.6341
-Min error: -1.0000
-Max error: 0.4489
-
-DenseLatticeNet (2023-03-16, 60 epochs):
-Testing loss: 2.35e+00
-Mean Error: -0.0004
-MAE: 0.0021
-MAE (nonzero): 0.0285
-MRE (nonzero): 5.7346
-Min error: -1.0000
-Max error: 1.0000
-"""
+    #     dataset = LatticeDataset(normalize_inputs=True),
+    #     model = LatticeNet(), #LatticeNet(output_max=LatticeDataset.DIAMETER_SCALE),
+    #     # dataset = AutoencoderDataset(),
+    #     # model = Autoencoder5(),
+    #     Optimizer = torch.optim.Adam,
+    #     loss_function = nn.MSELoss(),
+    # )
+    infer_femur()
