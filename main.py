@@ -22,39 +22,21 @@ random.seed(42)
 CHECKPOINTS_FOLDER = 'Checkpoints'
 
 
-def plot_loss(figure, epochs: list, loss: List[list], labels: List[str], start_epoch: int = None) -> None:
-    """
-    Plot loss values over epochs on the given figure.
-    Parameters:
-    `figure`: A figure to plot on.
-    `epochs`: A sequence of epoch numbers.
-    `loss`: A list of lists of loss values, each of which are plotted as separate lines. Each nested list must have the same length as `epochs`.
-    `labels`: A list of strings to display in the legend for each item in `loss`.
-    `start_epoch`: The epoch number at which to display a horizontal line to indicate the start of the current training session.
-    """
-    figure.clear()
-    axis = figure.add_subplot(1, 1, 1)  # Number of rows, number of columns, index
-    
-    # markers = (".:", ".-")
-
-    # Plot each set of loss values.
-    for i, loss_i in enumerate(loss):
-        if not len(loss_i):
-            continue
-        axis.semilogy(epochs[:len(loss_i)], loss_i, ".-", label=labels[i])
-        axis.annotate(f"{loss_i[-1]:,.2e}", (epochs[-1 - (len(epochs)-len(loss_i))], loss_i[-1]), fontsize=10)
-
-    axis.legend()
-    axis.set_xlabel("Epochs")
-    axis.set_ylabel("Loss")
-    axis.grid(axis="y")
+def plot_loss(losses_training: List[float], losses_validation: List[float]) -> None:
+    plt.figure()
+    plt.semilogy(range(1, len(losses_training)+1), losses_training, '-', label='Training')
+    plt.semilogy(range(1, len(losses_validation)+1), losses_validation, '-', label='Validation')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.show()
 
 def save_model(filepath: str, **kwargs) -> None:
     """Save model parameters to a file."""
     torch.save(kwargs, filepath)
     print(f"Saved model to {filepath}.")
 
-def load_model(filepath: str, device: str) -> dict:
+def load_model(filepath: str, device: str='cpu') -> dict:
     """Return a dictionary of model parameters from a file."""
     try:
         checkpoint = torch.load(filepath, map_location=device)
@@ -65,7 +47,7 @@ def load_model(filepath: str, device: str) -> dict:
         return checkpoint
 
 def train(
-    device: str, epoch_count: int, checkpoint: dict, filepath_model: str, save_model_every: int,
+    device: str, epoch_count: int, checkpoint: dict, filepath_model: str, save_model_every: int, save_best_separately: bool,
     model: nn.Module, optimizer: torch.optim.Optimizer, loss_function: nn.Module,
     train_dataloader: DataLoader, validate_dataloader: DataLoader,
     scheduler = None,
@@ -74,30 +56,19 @@ def train(
     """Train and validate the given model and return the model after finishing training."""
 
     # Load the previous training history.
-    if checkpoint is not None:
-        epoch = checkpoint["epoch"] + 1
-        previous_training_loss = checkpoint["training_loss"]
-        previous_validation_loss = checkpoint["validation_loss"]
-    else:
-        epoch = 1
-        previous_training_loss = []
-        previous_validation_loss = []
+    epoch = checkpoint.get('epoch', 0) + 1
     epochs = range(epoch, epoch+epoch_count)
+    training_loss = checkpoint.get('training_loss', [])
+    validation_loss = checkpoint.get('validation_loss', [])
 
     # Initialize values to send to the GUI, to be updated throughout training.
     if queue:
         info_gui["progress_epoch"] = (epoch, epochs[-1])
         info_gui["progress_batch"] = (0, 0)
         info_gui["epochs"] = epochs
-        info_gui["training_loss"] = []
-        info_gui["previous_training_loss"] = previous_training_loss
-        info_gui["validation_loss"] = []
-        info_gui["previous_validation_loss"] = previous_validation_loss
+        info_gui["training_loss"] = training_loss
+        info_gui["validation_loss"] = validation_loss
         queue.put(info_gui)
-
-    # Initialize the loss values for the current training session.
-    training_loss = []
-    validation_loss = []
 
     # Main training-validation loop.
     for epoch in epochs:
@@ -197,7 +168,7 @@ def train(
         for metric, value in results.items():
             print(f"{metric}: {value:,.4f}")
 
-        # Save the model parameters periodically and in the last iteration of the loop.
+        # Save the model periodically and in the last epoch.
         if epoch % save_model_every == 0 or epoch == epochs[-1]:
             save_model(
                 filepath_model,
@@ -205,19 +176,21 @@ def train(
                 model_state_dict = model.state_dict(),
                 optimizer_state_dict = optimizer.state_dict(),
                 learning_rate = optimizer.param_groups[0]["lr"],
-                training_loss = [*previous_training_loss, *training_loss],
-                validation_loss = [*previous_validation_loss, *validation_loss],
+                training_loss = training_loss,
+                validation_loss = validation_loss,
+            )
+        # Save the model if the model achieved the lowest validation loss so far.
+        if save_best_separately and validation_loss[-1] <= min(validation_loss):
+            save_model(
+                f"{filepath_model[:-4]}[best]{filepath_model[-4:]}",
+                epoch = epoch,
+                model_state_dict = model.state_dict(),
+                optimizer_state_dict = optimizer.state_dict(),
+                learning_rate = optimizer.param_groups[0]['lr'],
+                training_loss = training_loss,
+                validation_loss = validation_loss,
             )
         
-        # # Show weights as a 3D cube, if training MLP
-        # if epoch % 50 == 0:
-        #     with torch.no_grad():
-        #         w = torch.clone(model.get_parameter('linear.0.weight')).view((11, 11, 11))
-        #         w -= w.min()
-        #         w /= w.max()
-        #         w *= 255
-        #         visualize_input(w[:6, :, :], opacity=1)
-
         # Show the elapsed time during the epoch.
         time_end = time.time()
         duration = time_end - time_start
@@ -237,17 +210,7 @@ def train(
         if queue_to_main and not queue_to_main.empty():
             queue_to_main.queue.clear()
             break
-    
-    # Plot the loss history.
-    if not queue:
-        figure = plt.figure()
-        
-        all_training_loss = [*previous_training_loss, *training_loss]
-        all_validation_loss = [*previous_validation_loss, *validation_loss]
-        plot_loss(figure, range(1, epochs[-1]+1), [all_training_loss, all_validation_loss], ["Training", "Validation"], start_epoch=epochs[0])
 
-        plt.show()
-    
     return model
 
 @torch.no_grad()
@@ -371,8 +334,8 @@ def infer_femur():
 
 def main(
     epoch_count: int, learning_rate: float, decay_learning_rate: bool, batch_sizes: Tuple[int, int, int], data_split: Tuple[float, float, float], dataset: Dataset, model: nn.Module,
-    filename_model: str, train_existing: bool, save_model_every: int,
-    train_model: bool, test_model: bool, visualize_results: bool,
+    filename_model: str, train_existing: bool, save_model_every: int, save_best_separately: bool,
+    train_model: bool, test_model: bool, show_loss: bool, show_parity: bool, show_predictions: bool,
     Optimizer: torch.optim.Optimizer = torch.optim.SGD, loss_function: nn.Module = nn.MSELoss(),
     queue: Queue = None, queue_to_main: Queue = None,
 ):
@@ -380,7 +343,7 @@ def main(
     Parameters:
     `train_model`: Train the model.
     `test_model`: Test the model.
-    `visualize_results`: Show plots or visualizations.
+    `show_predictions`: Show plots or visualizations.
     `train_existing`: Load a previously saved model and continue training it.
 
     `epoch_count`: Number of epochs to train.
@@ -414,7 +377,7 @@ def main(
             learning_rate = checkpoint["learning_rate"]
             print(f"Using last learning rate {learning_rate}.")
     else:
-        checkpoint = None
+        checkpoint = {}
 
     # Split the dataset into training, validation, and testing datasets. Split by input image instead of by struts to ensure that input images in the training set do not appear in the validation or testing sets.
     image_indices = list(range(dataset.inputs.size(0)))
@@ -442,9 +405,9 @@ def main(
         scheduler = None
 
     # Load previously saved model and optimizer parameters.
-    if checkpoint is not None:
-        model.load_state_dict(checkpoint["model_state_dict"])
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    if checkpoint:
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         if queue:
             queue.put({
                 "epochs": range(1, checkpoint["epoch"]+1),
@@ -459,6 +422,7 @@ def main(
             checkpoint = checkpoint,
             filepath_model = filepath_model,
             save_model_every = save_model_every,
+            save_best_separately = save_best_separately,
             model = model,
             optimizer = optimizer,
             loss_function = loss_function,
@@ -469,7 +433,18 @@ def main(
             queue_to_main = queue_to_main,
             info_gui = info_gui,
         )
-    
+
+    # Show the loss history.
+    if show_loss:
+        checkpoint = load_model(filepath=filepath_model)
+        training_loss = checkpoint.get('training_loss', [])
+        validation_loss = checkpoint.get('validation_loss', [])
+        plot_loss(training_loss, validation_loss)
+
+    # Load the best model.
+    checkpoint = load_model(f"{filepath_model[:-4]}[best]{filepath_model[-4:]}")
+    model.load_state_dict(checkpoint['model_state_dict'])
+
     if test_model:
         outputs, labels, inputs = test(
             device = device,
@@ -496,7 +471,15 @@ def main(
         # print([metrics.mae(outputs[:, channel, ...], labels[:, channel, ...]) for channel in range(outputs.shape[1])])
         # print([metrics.mae(outputs[:, channel, ...][labels[:, channel, ...] > 0], labels[:, channel, ...][labels[:, channel, ...] > 0]) for channel in range(outputs.shape[1])])
 
-        if visualize_results:
+        # Show a parity plot.
+        if show_parity:
+            plt.plot(labels.flatten(), outputs.flatten(), '.')
+            plt.plot([labels.min(), labels.max()], [labels.min(), labels.max()], 'k--')
+            plt.xlabel('True')
+            plt.ylabel('Predicted')
+            plt.show()
+
+        if show_predictions:
             # # Calculate (x, y, z) coordinates of each node.
             # locations_1 = []
             # locations_2 = []
@@ -543,26 +526,26 @@ if __name__ == "__main__":
     # visualize_lattice(*convert_array_to_lattice(outputs[0, ...]))
     # # visualize_lattice(*convert_array_to_lattice(labels[0, ...].numpy()))
 
-    # main(
-    #     train_model = True,
-    #     test_model = True,
-    #     visualize_results = True,
+    main(
+        train_model = True,
+        test_model = True,
+        show_loss = True,
+        show_parity = True,
+        show_predictions = True,
 
-    #     train_existing = True,
-    #     filename_model = 'LatticeNet.pth',
-    #     save_model_every = 10,
+        train_existing = True,
+        filename_model = 'LatticeNet.pth',
+        save_model_every = 10,
+        save_best_separately = True,
 
-    #     epoch_count = 10,
-    #     learning_rate = 1e-5,
-    #     decay_learning_rate = False,
-    #     batch_sizes = (64, 64, 64),
-    #     data_split = (0.8, 0.1, 0.1),
+        epoch_count = 50,
+        learning_rate = 1e-3,
+        decay_learning_rate = False,
+        batch_sizes = (64, 64, 64),
+        data_split = (0.8, 0.1, 0.1),
         
-    #     dataset = LatticeDataset(normalize_inputs=True),
-    #     model = LatticeNet(), #LatticeNet(output_max=LatticeDataset.DIAMETER_SCALE),
-    #     # dataset = AutoencoderDataset(),
-    #     # model = Autoencoder5(),
-    #     Optimizer = torch.optim.Adam,
-    #     loss_function = nn.MSELoss(),
-    # )
-    infer_femur()
+        dataset = LatticeDataset(normalize_inputs=True),
+        model = LatticeNet(),
+        Optimizer = torch.optim.Adam,
+        loss_function = nn.MSELoss(),
+    )

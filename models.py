@@ -6,9 +6,11 @@ from torch.nn import *
 # import torch_geometric
 
 
-def get_parameter_count(model: Module) -> int:
-    """Get the number of learnable parameters in the model."""
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+def print_model_summary(model: Module) -> None:
+    """Print information about a model."""
+    print(f"\n{type(model).__name__}")
+    print(f"\tTotal parameters: {sum(p.numel() for p in model.parameters()):,}")
+    print(f"\tLearnable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
 
 # Function that returns a residual block.
 def residual(in_channels, out_channels):
@@ -113,6 +115,8 @@ class LatticeNet(Module):
         self.residual_1 = residual(c*1, c*1)
         self.residual_2 = residual(c*2, c*2)
         self.residual_3 = residual(output_channels, output_channels)
+
+        print_model_summary(self)
     
     def forward(self, x):
         x_original = x
