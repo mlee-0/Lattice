@@ -28,9 +28,9 @@ class LatticeDataset(torch.utils.data.Dataset):
             self.inputs = self.inputs[:size]
             self.outputs = self.outputs[:size]
 
-        # Add a second binary channel with values of either -1 (inactive nodes) or 1 (active nodes).
+        # Add a second binary channel with values of either 0 (inactive nodes) or 1 (active nodes).
         self.inputs = torch.cat(
-            (self.inputs, torch.any(self.outputs > 0, dim=1, keepdim=True) * 2 - 1),
+            (self.inputs, torch.any(self.outputs > 0, dim=1, keepdim=True)),
             dim=1,
         )
 
