@@ -1,11 +1,8 @@
 import sys
 
-import matplotlib.pyplot as plt
 import numpy as np
-from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import *
 import vtk
-from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor  # type: ignore
 
 from datasets import *
 from gui import InferenceWindow
@@ -304,7 +301,4 @@ def visualize_actors(*actors, gui: bool=False, screenshot_filename: str=None):
 
 
 if __name__ == "__main__":
-    from scipy.io import loadmat
-    data = loadmat('top.mat')
-    density = data['x']
-    write_pickle(density, 'topology_optimization.pickle')
+    pass

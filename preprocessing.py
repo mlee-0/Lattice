@@ -10,7 +10,6 @@ from typing import Any, List, Tuple
 
 import numpy as np
 import torch
-# import torch_geometric
 
 
 try:
@@ -343,80 +342,6 @@ def convert_outputs_to_array(outputs: list) -> torch.Tensor:
 
     return torch.tensor(array).float()
 
-# def convert_dataset_to_graph(inputs: torch.Tensor, outputs: list): -> List[torch_geometric.data.Data]:
-#     """Convert a 5D array of input data and a list of output data to a list of graphs."""
-
-#     assert inputs.shape[0] == len(outputs), f"Number of inputs {inputs.shape[0]} and number of outputs {len(outputs)} do not match."
-#     n = len(outputs)
-#     h, w, d = inputs.size()[2:5]
-
-#     node_numbers = make_node_numbers()
-#     struts = read_struts()
-
-#     graphs = []
-
-#     for i in range(n):
-#         print(f"Converting output {i+1} of {n}...", end='\r')
-
-#         mask = mask_of_active_nodes([strut for strut, d in outputs[i]], struts, node_numbers)
-#         indices = np.argwhere(mask)
-
-#         number_nodes = indices.shape[0]
-#         number_total_nodes = node_numbers.size
-
-#         # Node feature matrix with shape (number of nodes, number of features per node). Includes all possible nodes, not just the nodes with nonzero values, to avoid having to renumber nodes.
-#         node_features = torch.zeros([number_total_nodes, 4])
-#         # List of edges as 2-tuples (node 1, node 2). Struts are formed within a 3x3x3 neighborhood.
-#         edge_index = set()
-        
-#         for x, y, z in indices:
-#             node_1 = node_numbers[x, y, z]
-#             # # Insert the average density [0, 1] in the 3x3 neighborhood of each node.
-#             # node_features[node_1-1, 0] = torch.mean(inputs[i, 0, max(0, x-1):min(h, x+2), max(0, y-1):min(w, y+2), max(0, z-1):min(d, z+2)].float()) / 255
-#             # Insert density [0, 1] of each node.
-#             node_features[node_1-1, 0] = inputs[i, 0, x, y, z] / 255
-#             # Insert coordinates of each node.
-#             node_features[node_1-1, 1] = x / (INPUT_SHAPE[0] - 1)
-#             node_features[node_1-1, 2] = y / (INPUT_SHAPE[1] - 1)
-#             node_features[node_1-1, 3] = z / (INPUT_SHAPE[2] - 1)
-
-#             # Insert edges for all valid struts.
-#             r = 1
-#             neighborhood = node_numbers[
-#                 max(0, x-r):min(INPUT_SHAPE[0], x+r+1),
-#                 max(0, y-r):min(INPUT_SHAPE[1], y+r+1),
-#                 max(0, z-r):min(INPUT_SHAPE[2], z+r+1),
-#             ]
-#             for node_2 in neighborhood.flatten():
-#                 if node_1 != node_2 and node_2 in node_numbers[mask]:
-#                     edge_index.add(tuple(sorted((node_1, node_2))))
-        
-#         edge_index = list(edge_index)
-#         # Dictionary of strut indices {(node 1, node 2): index} to reduce runtime by avoiding list search.
-#         edge_index_indices = {nodes: index for index, nodes in enumerate(edge_index)}
-#         # Each strut must be represented by two separate edges in opposite directions to make the graph undirected (both (1, 2) and (2, 1)).
-#         edge_index.extend([nodes[::-1] for nodes in edge_index])
-
-#         # Edge labels with shape (number of edges, 1).
-#         labels = torch.zeros([len(edge_index)//2, 1])
-#         for strut, diameter in outputs[i]:
-#             edge = edge_index_indices[struts[strut - 1]]
-#             labels[edge, 0] = diameter
-
-#         # Graph connectivity matrix transposed into shape (2, number of edges), where each column contains the two nodes that form an edge.
-#         edge_index = torch.tensor(edge_index, dtype=torch.int64).T
-#         # Convert from node numbers to node indices.
-#         edge_index -= 1
-
-#         graph = torch_geometric.data.Data(
-#             x=node_features,
-#             edge_index=edge_index,
-#             y=labels,
-#         )
-#         graphs.append(graph)
-    
-#     return graphs
-
 def mask_of_active_nodes(strut_numbers: list, struts: list, node_numbers: np.ndarray) -> np.ndarray:
     """Return a Boolean array of indicating which nodes are used for the given struts."""
     active_nodes = tuple({node for strut in strut_numbers for node in struts[strut - 1]})
@@ -451,16 +376,3 @@ if __name__ == "__main__":
     outputs = convert_outputs_to_array(outputs)
     write_pickle(inputs, 'Training_Data_11/inputs_augmented.pickle')
     write_pickle(outputs, 'Training_Data_11/outputs_array_augmented.pickle')
-
-    # masked_inputs = mask_inputs(inputs, outputs)
-    # adjacency = convert_outputs_to_adjacency(outputs)
-    # write_pickle(masked_inputs, 'Training_Data_10/inputs_masked.pickle')
-    # write_pickle(adjacency, 'Training_Data_10/outputs_adjacency.pickle')
-    
-    # graphs = convert_dataset_to_graph(inputs, outputs)
-    # write_pickle(graphs, 'Training_Data_10/graphs.pickle')
-
-    # outputs = read_outputs()
-    # outputs = augment_outputs(outputs)
-    # vector = convert_outputs_to_vector(outputs)
-    # write_pickle(vector, 'Training_Data_10/outputs_vector.pickle')

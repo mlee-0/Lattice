@@ -175,7 +175,7 @@ def train(
                 epoch = epoch,
                 model_state_dict = model.state_dict(),
                 optimizer_state_dict = optimizer.state_dict(),
-                learning_rate = optimizer.param_groups[0]["lr"],
+                learning_rate = optimizer.param_groups[0]['lr'],
                 training_loss = training_loss,
                 validation_loss = validation_loss,
             )
@@ -389,7 +389,7 @@ def main(
         generator=torch.Generator().manual_seed(42),
     )
 
-    print(f"\nSplit {len(dataset):,} samples into {len(train_dataset):,} training / {len(validate_dataset):,} validation / {len(test_dataset):,} testing.")
+    print(f"\nSplit {len(dataset):,} data into {len(train_dataset):,} training / {len(validate_dataset):,} validation / {len(test_dataset):,} testing.")
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_sizes[0], shuffle=True, drop_last=False)
     validate_dataloader = DataLoader(validate_dataset, batch_size=batch_sizes[1], shuffle=True)
@@ -397,7 +397,6 @@ def main(
 
     # Initialize the model and optimizer.
     model.to(device)
-    print(f"Using model {type(model).__name__} with {get_parameter_count(model):,} parameters.")
     optimizer = Optimizer(model.parameters(), lr=learning_rate)
     if decay_learning_rate:
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
@@ -467,9 +466,6 @@ def main(
         results = metrics.evaluate(outputs, labels)
         for metric, value in results.items():
             print(f"{metric}: {value:,.4f}")
-        # # Metrics by channel.
-        # print([metrics.mae(outputs[:, channel, ...], labels[:, channel, ...]) for channel in range(outputs.shape[1])])
-        # print([metrics.mae(outputs[:, channel, ...][labels[:, channel, ...] > 0], labels[:, channel, ...][labels[:, channel, ...] > 0]) for channel in range(outputs.shape[1])])
 
         # Show a parity plot.
         if show_parity:
@@ -479,26 +475,11 @@ def main(
             plt.ylabel('Predicted')
             plt.show()
 
+        # Show the prediction and label side-by-side, with label shown on right.
         if show_predictions:
-            # # Calculate (x, y, z) coordinates of each node.
-            # locations_1 = []
-            # locations_2 = []
-            # for i in range(inputs.shape[0]):
-            #     coordinates = np.argwhere(inputs[i, 1, ...])
-            #     assert coordinates.shape[0] == 2
-            #     locations_1.append(tuple(coordinates[0, :]))
-            #     locations_2.append(tuple(coordinates[1, :]))
-
-            # # metrics.plot_histograms(outputs, labels, bins=20)
-            # metrics.plot_predicted_vs_true(outputs[labels > 0], labels[labels > 0])
-            # # metrics.plot_error_by_angle(outputs, labels, locations_1, locations_2)
-            # # metrics.plot_error_by_edge_distance(outputs, labels, locations_1, locations_2)
-            # # metrics.plot_error_by_xy_edge_distance(outputs, labels, locations_1, locations_2)
-
-            for i in range(2):
-                # Show the prediction and label side-by-side, with label shown on right.
-                actor_output = make_actor_lattice(*convert_array_to_lattice(outputs[i, ...]))
-                actor_label = make_actor_lattice(*convert_array_to_lattice(labels[i, ...]), translation=(12, 0, 0))
+            for index in random.sample(range(len(test_dataset)), k=2):
+                actor_output = make_actor_lattice(*convert_array_to_lattice(outputs[index, ...]))
+                actor_label = make_actor_lattice(*convert_array_to_lattice(labels[index, ...]), translation=(12, 0, 0))
                 visualize_actors(actor_output, actor_label, gui=False)
 
 
