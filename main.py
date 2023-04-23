@@ -9,15 +9,12 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader, random_split
-# import torch_geometric
 
 from datasets import *
-import metrics
+from metrics import *
 from models import *
 from visualization import *
 
-
-random.seed(42)
 
 CHECKPOINTS_FOLDER = 'Checkpoints'
 
@@ -164,9 +161,7 @@ def train(
         # train_dataloader.dataset.dataset.unnormalize(labels)
         outputs /= LatticeDataset.DIAMETER_SCALE
         labels /= LatticeDataset.DIAMETER_SCALE
-        results = metrics.evaluate(outputs, labels)
-        for metric, value in results.items():
-            print(f"{metric}: {value:,.4f}")
+        results = evaluate(outputs, labels)
 
         # Save the model periodically and in the last epoch.
         if epoch % save_model_every == 0 or epoch == epochs[-1]:
@@ -263,17 +258,26 @@ def test(
 
     return outputs, labels, inputs
 
-def evaluate(outputs: np.ndarray, labels: np.ndarray, queue=None, info_gui: dict=None):
-    """Calculate and return evaluation metrics."""
+def evaluate(outputs: np.ndarray, labels: np.ndarray):
+    """Print and return evaluation metrics."""
 
-    results = metrics.evaluate(outputs, labels)
+    results = {
+        'Mean Error': me(outputs, labels),
+        'MAE': mae(outputs, labels),
+        'MSE': mse(outputs, labels),
+        'MRE': mre(outputs, labels),
+        'Nonzero MAE': mae(outputs[labels > 0], labels[labels > 0]),
+        'Nonzero MSE': mse(outputs[labels > 0], labels[labels > 0]),
+        'Nonzero MRE': mre(outputs[labels > 0], labels[labels > 0]),
+        'Min error': min_error(outputs, labels),
+        'Max error': max_error(outputs, labels),
+        # 'Zeros correct': fraction_of_zeros_correct(outputs, labels),
+        # 'Zeros incorrect': fraction_of_zeros_incorrect(outputs, labels),
+        # 'Number of values out of bounds': ((outputs < 0) + (outputs > 1)).sum(),
+        # 'Fraction of values out of bounds': ((outputs < 0) + (outputs > 1)).sum() / outputs.size,
+    }
     for metric, value in results.items():
-        print(f"{metric}: {value:,.4f}")
-
-    # Initialize values to send to the GUI.
-    if queue:
-        info_gui["info_metrics"] = results
-        queue.put(info_gui)
+        print(f"{metric}: {value:,.5f}")
 
     return results
 
@@ -281,7 +285,7 @@ def evaluate(outputs: np.ndarray, labels: np.ndarray, queue=None, info_gui: dict
 def infer_lattice(model: nn.Module, filename_model: str, dataset: Dataset) -> torch.Tensor:
     """Make predictions using a trained model on a dataset without labels."""
 
-    checkpoint = load_model(os.path.join(CHECKPOINTS_FOLDER, filename_model), 'cpu')
+    checkpoint = load_model(os.path.join(CHECKPOINTS_FOLDER, filename_model))
     model.load_state_dict(checkpoint['model_state_dict'])
     model.train(False)
     output = model(dataset[0:1])
@@ -292,7 +296,7 @@ def infer_lattice(model: nn.Module, filename_model: str, dataset: Dataset) -> to
 def infer_strut(model: nn.Module, filename_model: str, dataset: Dataset, batch_size: int) -> Tuple[list, list, torch.Tensor]:
     """Make predictions using a trained model on a dataset without labels. Defined as a generator function to allow visualizing intermediate results one by one."""
 
-    checkpoint = load_model(os.path.join(CHECKPOINTS_FOLDER, filename_model), 'cpu')
+    checkpoint = load_model(os.path.join(CHECKPOINTS_FOLDER, filename_model))
     model.load_state_dict(checkpoint['model_state_dict'])
     model.train(False)
 
@@ -312,7 +316,7 @@ def infer_strut(model: nn.Module, filename_model: str, dataset: Dataset, batch_s
 def infer_femur():
     dataset = FemurDataset()
 
-    checkpoint = load_model('Checkpoints/LatticeNet.pth', device='cpu')
+    checkpoint = load_model(os.path.join(CHECKPOINTS_FOLDER, 'LatticeNet.pth'))
     model = LatticeNet()
     model.load_state_dict(checkpoint['model_state_dict'])
     with torch.no_grad():
@@ -360,7 +364,7 @@ def main(
     `queue_to_main`: A Queue used to receive information from the GUI.
     """
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = 'cpu'  #"cuda" if torch.cuda.is_available() else "cpu"
     print(f"\nUsing {device} device.")
 
     # Initialize values to send to the GUI.
@@ -463,9 +467,17 @@ def main(
         outputs /= LatticeDataset.DIAMETER_SCALE
         labels /= LatticeDataset.DIAMETER_SCALE
 
-        results = metrics.evaluate(outputs, labels)
-        for metric, value in results.items():
-            print(f"{metric}: {value:,.4f}")
+        results = evaluate(outputs, labels)
+
+        # # Remove invalid struts.
+        # for i, channel, x, y, z in zip(*np.nonzero(outputs)):
+        #     dx, dy, dz = DIRECTIONS[channel]
+        #     try:
+        #         if inputs[i, 1, x + dx, y + dy, z + dz] < 0:
+        #             outputs[i, channel, x, y, z] = 0
+        #     except IndexError:
+        #         continue
+        #         # outputs[i, channel, x, y, z] = 0
 
         # Show a parity plot.
         if show_parity:
@@ -477,46 +489,23 @@ def main(
 
         # Show the prediction and label side-by-side, with label shown on right.
         if show_predictions:
-            for index in random.sample(range(len(test_dataset)), k=2):
+            for index in random.sample(range(len(test_dataset)), k=1):
                 actor_output = make_actor_lattice(*convert_array_to_lattice(outputs[index, ...]))
                 actor_label = make_actor_lattice(*convert_array_to_lattice(labels[index, ...]), translation=(12, 0, 0))
-                visualize_actors(actor_output, actor_label, gui=False)
+                visualize_actors(actor_output, actor_label, gui=True)
 
 
 if __name__ == "__main__":
-    # Test on 51x51x51
-    # labels = read_outputs()
-    # labels = convert_outputs_to_array(labels)
-    # inputs = read_pickle('Training_Data_51/inputs.pickle').float()[:1, ...]
-    # inputs /= 255
-    # inputs = torch.cat([inputs, torch.any(labels > 0, dim=1, keepdim=True) * 2 - 1], dim=1)
-    # inputs -= -0.1424
-    # inputs /= 0.7858
-
-    # model = ResNetArray(100)
-    # optimizer = torch.optim.Adam(model.parameters(), 1e-3)
-    # checkpoint = load_model('Training_Data_51/model.pth', 'cpu')
-    # model.load_state_dict(checkpoint["model_state_dict"])
-    # optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-    # with torch.no_grad():
-    #     outputs = model(inputs)
-    
-    # outputs = outputs.numpy() / 100
-    # print(outputs.min(), outputs.max(), outputs.mean())
-
-    # visualize_lattice(*convert_array_to_lattice(outputs[0, ...]))
-    # # visualize_lattice(*convert_array_to_lattice(labels[0, ...].numpy()))
-
     main(
-        train_model = True,
+        train_model = not True,
         test_model = True,
         show_loss = True,
-        show_parity = True,
+        show_parity = not True,
         show_predictions = True,
 
         train_existing = True,
         filename_model = 'LatticeNet.pth',
-        save_model_every = 10,
+        save_model_every = 5,
         save_best_separately = True,
 
         epoch_count = 50,

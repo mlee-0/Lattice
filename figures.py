@@ -248,4 +248,4 @@ def plot_errors_by_channel():
     plt.show()
 
 if __name__ == '__main__':
-    visualize_unique_struts()
+    pass
